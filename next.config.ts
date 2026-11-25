@@ -7,8 +7,8 @@ const config: NextConfig = {
   async headers() {
     return [
       {
-        // Frame files are addressed with ?v=<FRAMES_VERSION>; bump it when frames are rebuilt.
-        source: '/frames/:path*',
+        // Tour frames and stills are addressed with ?v=<version>; bump it when frames are rebuilt.
+        source: '/:dir(tour|stills)/:path*',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
       },
     ];

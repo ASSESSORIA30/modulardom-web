@@ -20,13 +20,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     title: meta.title,
     description: meta.description,
     alternates: { languages: { ca: '/ca', es: '/es' } },
-    openGraph: { title: meta.title, description: meta.description, images: ['/frames/exterior/poster.jpg'], locale: lang },
+    openGraph: { title: meta.title, description: meta.description, images: ['/stills/tour-exterior.webp'], locale: lang },
     // test deployments stay out of search engines until launch
     robots: { index: false, follow: false },
   };
 }
 
-export const viewport: Viewport = { themeColor: '#1d1e20', viewportFit: 'cover' };
+export const viewport: Viewport = { themeColor: '#141a1a', viewportFit: 'cover' };
 
 export default async function Layout({ children, params }: Params & { children: React.ReactNode }) {
   const { lang } = await params;

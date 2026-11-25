@@ -6,8 +6,8 @@ export const setLenis = (l: Lenis | null) => {
   instance = l;
 };
 
-export function scrollToY(y: number) {
-  if (instance) instance.scrollTo(y, { duration: 1.6 });
+export function scrollToY(y: number, duration = 1.8) {
+  if (instance) instance.scrollTo(y, { duration, easing: (t) => 1 - Math.pow(1 - t, 4) });
   else window.scrollTo({ top: y, behavior: 'smooth' });
 }
 

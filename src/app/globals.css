@@ -1,35 +1,56 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/newsreader/opsz.css';
-@import '@fontsource-variable/newsreader/opsz-italic.css';
+@import '@fontsource/marcellus/latin-400.css';
+@import '@fontsource/marcellus/latin-ext-400.css';
 @import '@fontsource-variable/instrument-sans/wght.css';
 
+/*
+  ModularDom — V2.
+  Palette taken from the house at dusk: travertine, lime plaster, oak, the pool, the hour after sunset.
+  Type: Marcellus (cut like Roman inscription, for a company that builds in stone) + Instrument Sans.
+*/
 @theme {
-  --color-ivory: #f4efe6;
-  --color-travertine: #d9ccb6;
-  --color-travertine-deep: #b9a88c;
-  --color-oak: #a8744a;
-  --color-anthracite: #1d1e20;
-  --color-anthracite-soft: #2b2c2f;
-  --font-display: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+  --color-paper: #f4f0e8;
+  --color-stone: #e3dacb;
+  --color-stone-deep: #c8baa3;
+  --color-oak: #96663e;
+  --color-water: #2c7873;
+  --color-water-light: #9ad6cd;
+  --color-ink: #141a1a;
+  --color-ink-soft: #26302f;
+  --font-display: 'Marcellus', 'Iowan Old Style', 'Palatino Linotype', serif;
   --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --breakpoint-nav: 82rem;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --breakpoint-wide: 90rem;
 }
 
 :root {
-  --edge: clamp(1.25rem, 4vw, 4rem);
-  --unit: 230; /* scroll length of one scene, in lvh */
+  --edge: clamp(1.25rem, 4.2vw, 4.5rem);
+  --header-h: 4.5rem;
+  /* scroll length of the tour and of its hand-over to the page, in lvh */
+  --tour-len: 500;
+  --outro-len: 110;
+  /* where the film comes to rest as a plate on the page: inset top right bottom left, in % */
+  --plate-t: 56;
+  --plate-r: 5.5;
+  --plate-b: 5;
+  --plate-l: 5.5;
 }
-@media (min-width: 48rem) {
+@media (min-width: 56rem) {
   :root {
-    --unit: 280;
+    --tour-len: 600;
+    --plate-t: 15;
+    --plate-r: 4.5;
+    --plate-b: 13;
+    --plate-l: 45;
   }
 }
 
 html {
-  background: var(--color-anthracite);
-  color: var(--color-ivory);
+  background: var(--color-ink);
+  color: var(--color-paper);
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 html.lenis,
 html.lenis body {
@@ -40,248 +61,409 @@ html.lenis body {
 }
 body {
   font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow-x: clip;
 }
 ::selection {
-  background: var(--color-oak);
-  color: var(--color-ivory);
+  background: var(--color-water);
+  color: var(--color-paper);
 }
 :focus-visible {
   outline: 2px solid currentColor;
-  outline-offset: 3px;
+  outline-offset: 4px;
+}
+img {
+  -webkit-user-drag: none;
 }
 
 @layer components {
   .wrap {
-    padding-inline: var(--edge);
+    padding-left: max(var(--edge), env(safe-area-inset-left));
+    padding-right: max(var(--edge), env(safe-area-inset-right));
   }
 
-  .display {
+  /* —— type —— */
+  .t-display {
     font-family: var(--font-display);
-    font-weight: 300;
-    font-size: clamp(2.75rem, 1.1rem + 7.4vw, 8.75rem);
-    line-height: 0.96;
-    letter-spacing: -0.035em;
+    font-weight: 400;
+    font-size: clamp(2.1rem, 1.25rem + 2.9vw, 4.25rem);
+    line-height: 1.06;
+    letter-spacing: -0.012em;
     text-wrap: balance;
   }
-  .display em {
-    font-style: italic;
-    font-weight: 300;
-    letter-spacing: -0.03em;
-  }
-  .display-2 {
+  .t-title {
     font-family: var(--font-display);
-    font-weight: 300;
-    font-size: clamp(2.25rem, 1.2rem + 4.6vw, 5.5rem);
-    line-height: 1;
-    letter-spacing: -0.03em;
+    font-weight: 400;
+    font-size: clamp(1.9rem, 1.2rem + 2.3vw, 3.5rem);
+    line-height: 1.08;
+    letter-spacing: -0.01em;
     text-wrap: balance;
   }
-  .display-2 em {
-    font-style: italic;
+  .t-lead {
+    font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.25rem);
+    line-height: 1.5;
+    text-wrap: pretty;
   }
-  .lead {
-    font-size: clamp(1.0625rem, 0.95rem + 0.45vw, 1.375rem);
-    line-height: 1.45;
-    letter-spacing: -0.005em;
+  .t-note {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
   }
-  .eyebrow {
-    font-size: 0.75rem;
-    font-weight: 500;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+  .t-num {
     font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
   }
 
-  /* a word that rises out of its own mask */
+  /* —— words that rise out of their own mask —— */
   .word {
     display: inline-block;
     overflow: hidden;
     vertical-align: top;
-    padding: 0.06em 0.07em 0.16em 0.02em;
-    margin: -0.06em -0.07em -0.16em -0.02em;
+    padding: 0.08em 0.04em 0.18em;
+    margin: -0.08em -0.04em -0.18em;
   }
   .word > span {
     display: inline-block;
-    will-change: transform;
   }
 
+  /* —— buttons: the fill wipes across, the label trades colour with it —— */
   .btn {
+    position: relative;
+    isolation: isolate;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.875rem;
     min-height: 3.25rem;
-    padding: 0 1.5rem;
+    padding: 0 1.75rem;
+    overflow: hidden;
     font-size: 0.9375rem;
     font-weight: 500;
-    letter-spacing: 0.005em;
-    border-radius: 2px;
+    letter-spacing: 0.01em;
+    border: 1px solid var(--btn-line, currentColor);
+    background: var(--btn-bg, transparent);
+    color: var(--btn-fg, currentColor);
     transition:
-      background-color 0.3s,
-      color 0.3s,
-      transform 0.15s;
+      transform 160ms var(--ease-out),
+      color 240ms var(--ease-out);
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    background: var(--btn-fill, currentColor);
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path 300ms var(--ease-out);
   }
   .btn:active {
-    transform: translateY(1px) scale(0.985);
+    transform: scale(0.97);
   }
-  .btn svg {
-    transition: transform 0.45s var(--ease-out-expo);
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover {
+      color: var(--btn-fg-hover, var(--color-ink));
+    }
+    .btn:hover::before {
+      clip-path: inset(0);
+    }
   }
-  .btn:hover svg {
-    transform: translateX(5px);
+  .btn-paper {
+    --btn-bg: var(--color-paper);
+    --btn-fg: var(--color-ink);
+    --btn-line: var(--color-paper);
+    --btn-fill: var(--color-water-light);
+    --btn-fg-hover: var(--color-ink);
   }
-  .btn-light {
-    background: var(--color-ivory);
-    color: var(--color-anthracite);
+  .btn-ink {
+    --btn-bg: var(--color-ink);
+    --btn-fg: var(--color-paper);
+    --btn-line: var(--color-ink);
+    --btn-fill: var(--color-water);
+    --btn-fg-hover: var(--color-paper);
   }
-  .btn-light:hover {
-    background: #fff;
+  .btn-line {
+    --btn-line: color-mix(in srgb, currentColor 45%, transparent);
+    --btn-fill: var(--color-paper);
+    --btn-fg-hover: var(--color-ink);
   }
-  .btn-dark {
-    background: var(--color-anthracite);
-    color: var(--color-ivory);
-  }
-  .btn-dark:hover {
-    background: #000;
+  .btn-line-ink {
+    --btn-line: color-mix(in srgb, currentColor 40%, transparent);
+    --btn-fill: var(--color-ink);
+    --btn-fg-hover: var(--color-paper);
   }
 
-  /* text link whose rule draws in from the left */
+  /* text link: its rule leaves to the right and comes back from the left */
   .link {
     display: inline-flex;
     align-items: center;
     min-height: 2.75rem;
-    background: linear-gradient(currentColor, currentColor) no-repeat 0 calc(50% + 0.85em) / 100% 1px;
-    transition: background-size 0.5s var(--ease-out-expo);
+    font-weight: 500;
+    background: linear-gradient(currentColor, currentColor) no-repeat 0 calc(50% + 0.8em) / 100% 1px;
+    transition: background-size 300ms var(--ease-out);
   }
-  .link:hover {
-    background-size: 0 1px;
-    background-position-x: 100%;
+  @media (hover: hover) and (pointer: fine) {
+    .link:hover {
+      background-size: 0 1px;
+      background-position-x: 100%;
+    }
   }
-  .nav-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2.75rem;
-    background: linear-gradient(currentColor, currentColor) no-repeat 100% calc(50% + 0.85em) / 0 1px;
-    transition: background-size 0.5s var(--ease-out-expo);
+  .link:active {
+    opacity: 0.7;
   }
-  .nav-link:hover,
-  .nav-link[aria-current='page'] {
-    background-size: 100% 1px;
-    background-position-x: 0;
-  }
+}
+
+/* —— reveal on entering the viewport (once) —— */
+[data-reveal] .word > span {
+  transform: translateY(112%);
+  transition: transform 900ms var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 38ms);
+}
+[data-reveal][data-in] .word > span {
+  transform: none;
+}
+[data-reveal] [data-fade] {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 700ms var(--ease-out),
+    transform 900ms var(--ease-out);
+  transition-delay: calc(240ms + var(--i, 0) * 70ms);
+}
+[data-reveal][data-in] [data-fade] {
+  opacity: 1;
+  transform: none;
+}
+[data-reveal] [data-unveil] {
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path 1100ms var(--ease-in-out);
+  transition-delay: calc(var(--i, 0) * 90ms);
+}
+[data-reveal] [data-unveil] > img {
+  transform: scale(1.1);
+  transition: transform 1600ms var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 90ms);
+}
+[data-reveal][data-in] [data-unveil] {
+  clip-path: inset(0);
+}
+[data-reveal][data-in] [data-unveil] > img {
+  transform: none;
 }
 
 /* —— the tour —— */
 .tour-track {
-  height: calc((var(--units) * var(--unit) + 100) * 1lvh);
+  height: calc((var(--tour-len) + var(--outro-len) + 100) * 1lvh);
 }
 .tour-stage {
   position: sticky;
   top: 0;
   height: 100lvh;
   overflow: hidden;
-  background: var(--color-anthracite);
+  background: var(--color-paper);
 }
-/* copy lives in the part of the stage a phone always shows, whatever its toolbars do */
+.tour-plate {
+  position: absolute;
+  inset: 0;
+  background: var(--color-ink);
+  will-change: clip-path;
+}
+/* words live in the part of the stage a phone always shows, whatever its toolbars do */
 .tour-safe {
   position: absolute;
   inset: 0 0 auto;
   height: 100svh;
 }
-.scene-box {
+.station {
   position: absolute;
   inset: 0;
   display: flex;
-  isolation: isolate;
-  padding: 7rem var(--edge) clamp(2rem, 6vh, 4.5rem);
-  padding-right: calc(var(--edge) + 1.25rem);
+  padding: calc(var(--header-h) + 1.5rem) calc(var(--edge) + 2.75rem) clamp(1.75rem, 6svh, 4rem) var(--edge);
+  pointer-events: none;
 }
-.scene-box::before {
+.station-copy {
+  position: relative;
+  isolation: isolate;
+  max-width: min(100%, 31rem);
+  pointer-events: auto;
+  text-shadow: 0 1px 18px rgb(11 15 15 / 0.45);
+}
+.station-copy .btn {
+  text-shadow: none;
+}
+/* a pool of shade under the words only: the rest of the picture stays untouched */
+.station-copy::before {
   content: '';
   position: absolute;
-  inset: 0 0 -12lvh;
+  inset: -4.5rem -7rem -5rem;
   z-index: -1;
+  background: radial-gradient(closest-side, rgb(11 15 15 / 0.78), rgb(11 15 15 / 0.5) 52%, transparent);
   pointer-events: none;
-  background:
-    linear-gradient(to bottom, rgb(20 20 21 / 0.42), transparent 22%),
-    linear-gradient(to top, rgb(20 20 21 / 0.78), rgb(20 20 21 / 0.28) 42%, transparent 68%);
 }
-.scene-box[data-place='top-left']::before {
-  background: linear-gradient(to bottom, rgb(20 20 21 / 0.74), rgb(20 20 21 / 0.3) 46%, transparent 72%);
-}
-.scene-box[data-place='middle-left']::before {
-  background:
-    linear-gradient(to bottom, rgb(20 20 21 / 0.42), transparent 22%),
-    linear-gradient(to right, rgb(20 20 21 / 0.7), rgb(20 20 21 / 0.25) 55%, transparent 80%);
-}
-.scene-box[data-place='bottom-left'],
-.scene-box[data-place='bottom-right'] {
+.station[data-place='bottom-left'],
+.station[data-place='bottom-right'],
+.station[data-place='middle-right'] {
   align-items: flex-end;
 }
-.scene-box[data-place='middle-left'] {
-  align-items: flex-end;
-}
-.scene-box[data-place='top-left'] {
+.station[data-place='top-left'] {
   align-items: flex-start;
 }
-@media (min-width: 48rem) {
-  .scene-box {
-    padding-right: calc(var(--edge) + 5.5rem);
+@media (min-width: 56rem) {
+  .station {
+    padding-right: calc(var(--edge) + 5rem);
   }
-  .scene-box[data-place='middle-left'] {
+  .station[data-place='middle-right'] {
     align-items: center;
-  }
-  .scene-box[data-place='bottom-right'] {
     justify-content: flex-end;
-    text-align: right;
   }
-  .scene-box[data-place='bottom-right'] .scene-copy > * {
-    margin-left: auto;
+  .station[data-place='bottom-right'] {
+    justify-content: flex-end;
   }
-}
-.scene-copy {
-  max-width: min(100%, 68rem);
+  .station[data-place='top-left'] {
+    padding-top: calc(var(--header-h) + 4.5rem);
+  }
 }
 
-/* film grain: hides the softness of 720p footage on large screens */
-.grain {
+.tour-intro {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.07;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  inset: calc(var(--header-h) + 1rem) var(--edge) auto;
+  max-width: 34rem;
+}
+@media (min-width: 56rem) {
+  .tour-intro {
+    inset: 0 auto 0 var(--edge);
+    width: calc(45% - var(--edge) - 3.5rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
 }
 
-/* static tour (reduced motion): one still per screen */
+/* stills: the tour without motion */
 .still {
   position: relative;
   min-height: 100svh;
   overflow: hidden;
   isolation: isolate;
+  background: var(--color-ink);
 }
-.still .scene-box {
+.still .station {
   position: relative;
   min-height: 100svh;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
+/* —— gallery —— */
+.gallery {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  cursor: grab;
+}
+.gallery::-webkit-scrollbar {
+  display: none;
+}
+.gallery[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+.gallery-frame {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-stone);
+}
+.gallery-frame > img {
+  position: absolute;
+  inset: 0 -7%;
+  width: 114%;
+  max-width: none;
+  height: 100%;
+  object-fit: cover;
+  will-change: transform;
 }
 
-@keyframes drop {
+/* —— drawings that draw themselves —— */
+.draw path,
+.draw line,
+.draw rect,
+.draw polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 1300ms var(--ease-in-out);
+  transition-delay: calc(var(--d, 0) * 70ms);
+}
+.draw[data-on] path,
+.draw[data-on] line,
+.draw[data-on] rect,
+.draw[data-on] polyline {
+  stroke-dashoffset: 0;
+}
+.draw .thin {
+  stroke-width: 0.75;
+  opacity: 0.55;
+}
+
+/* —— MINERAL: letters cut from the stone itself —— */
+.mineral-word {
+  font-family: var(--font-display);
+  font-size: clamp(4.25rem, 19.5vw, 22rem);
+  line-height: 0.86;
+  letter-spacing: 0.02em;
+  color: var(--color-stone);
+  background-size: 135% auto;
+  background-position: 50% var(--shift, 40%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes swap {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translateY(6px);
+  }
+}
+@keyframes thread {
   0% {
     transform: translateY(-100%);
   }
   100% {
     transform: translateY(200%);
+  }
+}
+
+/* —— gentler world —— */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] .word > span,
+  [data-reveal] [data-fade],
+  [data-reveal] [data-unveil] > img {
+    transform: none;
+    transition: opacity 300ms ease;
+  }
+  [data-reveal] [data-unveil] {
+    clip-path: none;
+    transition: none;
+  }
+  .draw path,
+  .draw line,
+  .draw rect,
+  .draw polyline {
+    transition: none;
+    stroke-dashoffset: 0;
+  }
+  .btn::before,
+  .link {
+    transition: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    backdrop-filter: none !important;
+    background: var(--color-ink) !important;
   }
 }

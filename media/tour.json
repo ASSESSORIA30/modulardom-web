@@ -1,0 +1,262 @@
+{
+  "fps": 24,
+  "evenness": 0.7,
+  "clips": [
+    {
+      "source": "openart-cgt-20261125223118-hr0xc_1795617287103_c5123d46.mp4",
+      "from": 0,
+      "to": 356
+    },
+    {
+      "source": "ModularDom-video-02-retallat.mp4",
+      "from": 1,
+      "to": 193
+    }
+  ],
+  "focus": [
+    [
+      0,
+      0.36
+    ],
+    [
+      60,
+      0.36
+    ],
+    [
+      90,
+      0.43
+    ],
+    [
+      150,
+      0.47
+    ],
+    [
+      210,
+      0.46
+    ],
+    [
+      245,
+      0.55
+    ],
+    [
+      300,
+      0.52
+    ],
+    [
+      420,
+      0.5
+    ],
+    [
+      455,
+      0.46
+    ],
+    [
+      480,
+      0.52
+    ],
+    [
+      505,
+      0.56
+    ],
+    [
+      528,
+      0.5
+    ],
+    [
+      549,
+      0.38
+    ]
+  ],
+  "stills": [
+    {
+      "name": "poster",
+      "frame": 1,
+      "width": 1024,
+      "quality": 42
+    },
+    {
+      "name": "poster-p",
+      "frame": 1,
+      "width": 480,
+      "quality": 42,
+      "crop": [
+        0.2017,
+        0,
+        0.3166,
+        1
+      ]
+    },
+    {
+      "name": "tour-exterior",
+      "frame": 1,
+      "width": 1920
+    },
+    {
+      "name": "tour-exterior-p",
+      "frame": 1,
+      "width": 864,
+      "crop": [
+        0.2017,
+        0,
+        0.3166,
+        1
+      ]
+    },
+    {
+      "name": "tour-entrada",
+      "frame": 190,
+      "width": 1920
+    },
+    {
+      "name": "tour-entrada-p",
+      "frame": 190,
+      "width": 864,
+      "crop": [
+        0.3117,
+        0,
+        0.3166,
+        1
+      ]
+    },
+    {
+      "name": "tour-interior",
+      "frame": 357,
+      "width": 1920
+    },
+    {
+      "name": "tour-interior-p",
+      "frame": 357,
+      "width": 864,
+      "crop": [
+        0.3617,
+        0,
+        0.3166,
+        1
+      ]
+    },
+    {
+      "name": "tour-cuina",
+      "frame": 545,
+      "width": 1920
+    },
+    {
+      "name": "tour-cuina-p",
+      "frame": 545,
+      "width": 864,
+      "crop": [
+        0.2417,
+        0,
+        0.3166,
+        1
+      ]
+    },
+    {
+      "name": "space-facana",
+      "frame": 1,
+      "width": 2200
+    },
+    {
+      "name": "space-acces",
+      "frame": 135,
+      "width": 1300,
+      "crop": [
+        0.25,
+        0,
+        0.37,
+        1
+      ]
+    },
+    {
+      "name": "space-llindar",
+      "frame": 222,
+      "width": 1800,
+      "crop": [
+        0.3,
+        0.05,
+        0.6,
+        0.9
+      ]
+    },
+    {
+      "name": "space-sala",
+      "frame": 357,
+      "width": 2200
+    },
+    {
+      "name": "space-escala",
+      "frame": 475,
+      "width": 1500,
+      "crop": [
+        0.08,
+        0,
+        0.47,
+        1
+      ]
+    },
+    {
+      "name": "space-cuina",
+      "frame": 545,
+      "width": 2200
+    },
+    {
+      "name": "mat-traverti",
+      "frame": 135,
+      "width": 900,
+      "crop": [
+        0.08,
+        0.08,
+        0.24,
+        0.62
+      ]
+    },
+    {
+      "name": "mat-roure",
+      "frame": 135,
+      "width": 900,
+      "crop": [
+        0.34,
+        0.14,
+        0.24,
+        0.6
+      ]
+    },
+    {
+      "name": "mat-vidre",
+      "frame": 300,
+      "width": 1000,
+      "crop": [
+        0.27,
+        0.3,
+        0.28,
+        0.62
+      ]
+    },
+    {
+      "name": "mat-pedra",
+      "frame": 545,
+      "width": 1100,
+      "crop": [
+        0.12,
+        0.33,
+        0.3,
+        0.67
+      ]
+    },
+    {
+      "name": "mineral",
+      "frame": 160,
+      "width": 1400,
+      "crop": [
+        0.03,
+        0.1,
+        0.27,
+        0.74
+      ]
+    },
+    {
+      "name": "closing-standin",
+      "frame": 1,
+      "width": 2560
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "closing-standin": {
+    "w": 2560,
+    "h": 1440
+  },
+  "mat-pedra": {
+    "w": 1100,
+    "h": 1384
+  },
+  "mat-roure": {
+    "w": 900,
+    "h": 1268
+  },
+  "mat-traverti": {
+    "w": 900,
+    "h": 1308
+  },
+  "mat-vidre": {
+    "w": 1000,
+    "h": 1246
+  },
+  "mineral": {
+    "w": 1400,
+    "h": 2160
+  },
+  "poster-p": {
+    "w": 480,
+    "h": 854
+  },
+  "poster": {
+    "w": 1024,
+    "h": 576
+  },
+  "space-acces": {
+    "w": 1300,
+    "h": 1978
+  },
+  "space-cuina": {
+    "w": 2200,
+    "h": 1238
+  },
+  "space-escala": {
+    "w": 1500,
+    "h": 1796
+  },
+  "space-facana": {
+    "w": 2200,
+    "h": 1238
+  },
+  "space-llindar": {
+    "w": 1800,
+    "h": 1520
+  },
+  "space-sala": {
+    "w": 2200,
+    "h": 1238
+  },
+  "tour-cuina-p": {
+    "w": 864,
+    "h": 1538
+  },
+  "tour-cuina": {
+    "w": 1920,
+    "h": 1080
+  },
+  "tour-entrada-p": {
+    "w": 864,
+    "h": 1538
+  },
+  "tour-entrada": {
+    "w": 1920,
+    "h": 1080
+  },
+  "tour-exterior-p": {
+    "w": 864,
+    "h": 1538
+  },
+  "tour-exterior": {
+    "w": 1920,
+    "h": 1080
+  },
+  "tour-interior-p": {
+    "w": 864,
+    "h": 1538
+  },
+  "tour-interior": {
+    "w": 1920,
+    "h": 1080
+  }
+}
