@@ -18,6 +18,12 @@ Corporate website for ModularDom (Next.js). Project-level skills live in `.claud
 - **Delegate wide searches** to a subagent only when they would otherwise pull many files into context.
 - Keep answers and reports short; no restating of file contents already shown.
 
+## Project map
+
+- Tour (home): `src/components/journey/` (`timeline.ts` clock, `engine.ts` canvas + loading, `Journey.tsx` scroll + copy). Scenes: `src/content/scenes.ts`; copy CAT/ES: `src/content/i18n.ts`. Adding a scene: see README.
+- `public/frames/` (1,200+ generated WebP) and `media/originals/` are binary: never list or read them; regenerate with `npm run frames`.
+- Verify with `npm run build` and a Playwright run against `next start`; no test suite yet.
+
 ## Conventions
 
 - Do not edit files under `.claude/skills/` by hand; update them with `npx skills add <source> --skill <name> -a claude-code -y` (this also refreshes `skills-lock.json`).

@@ -1,0 +1,7 @@
+[
+  { "id": "exterior", "source": "originals/01-exterior.mp4", "focusX": 0.56 },
+  { "id": "entrada", "source": "originals/02-entrada.mp4", "focusX": 0.5 },
+  { "id": "rebedor", "source": "originals/03-rebedor.mp4", "focusX": 0.5 },
+  { "id": "salo", "source": "originals/04-salo.mp4", "focusX": 0.5 },
+  { "id": "cuina", "source": "originals/05-cuina.mp4", "focusX": 0.46 }
+]

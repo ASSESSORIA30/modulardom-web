@@ -1,0 +1,287 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/newsreader/opsz.css';
+@import '@fontsource-variable/newsreader/opsz-italic.css';
+@import '@fontsource-variable/instrument-sans/wght.css';
+
+@theme {
+  --color-ivory: #f4efe6;
+  --color-travertine: #d9ccb6;
+  --color-travertine-deep: #b9a88c;
+  --color-oak: #a8744a;
+  --color-anthracite: #1d1e20;
+  --color-anthracite-soft: #2b2c2f;
+  --font-display: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
+  --font-sans: 'Instrument Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --breakpoint-nav: 82rem;
+}
+
+:root {
+  --edge: clamp(1.25rem, 4vw, 4rem);
+  --unit: 230; /* scroll length of one scene, in lvh */
+}
+@media (min-width: 48rem) {
+  :root {
+    --unit: 280;
+  }
+}
+
+html {
+  background: var(--color-anthracite);
+  color: var(--color-ivory);
+  -webkit-text-size-adjust: 100%;
+}
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+::selection {
+  background: var(--color-oak);
+  color: var(--color-ivory);
+}
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+@layer components {
+  .wrap {
+    padding-inline: var(--edge);
+  }
+
+  .display {
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-size: clamp(2.75rem, 1.1rem + 7.4vw, 8.75rem);
+    line-height: 0.96;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  .display em {
+    font-style: italic;
+    font-weight: 300;
+    letter-spacing: -0.03em;
+  }
+  .display-2 {
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-size: clamp(2.25rem, 1.2rem + 4.6vw, 5.5rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+  .display-2 em {
+    font-style: italic;
+  }
+  .lead {
+    font-size: clamp(1.0625rem, 0.95rem + 0.45vw, 1.375rem);
+    line-height: 1.45;
+    letter-spacing: -0.005em;
+  }
+  .eyebrow {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* a word that rises out of its own mask */
+  .word {
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: top;
+    padding: 0.06em 0.07em 0.16em 0.02em;
+    margin: -0.06em -0.07em -0.16em -0.02em;
+  }
+  .word > span {
+    display: inline-block;
+    will-change: transform;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.875rem;
+    min-height: 3.25rem;
+    padding: 0 1.5rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    letter-spacing: 0.005em;
+    border-radius: 2px;
+    transition:
+      background-color 0.3s,
+      color 0.3s,
+      transform 0.15s;
+  }
+  .btn:active {
+    transform: translateY(1px) scale(0.985);
+  }
+  .btn svg {
+    transition: transform 0.45s var(--ease-out-expo);
+  }
+  .btn:hover svg {
+    transform: translateX(5px);
+  }
+  .btn-light {
+    background: var(--color-ivory);
+    color: var(--color-anthracite);
+  }
+  .btn-light:hover {
+    background: #fff;
+  }
+  .btn-dark {
+    background: var(--color-anthracite);
+    color: var(--color-ivory);
+  }
+  .btn-dark:hover {
+    background: #000;
+  }
+
+  /* text link whose rule draws in from the left */
+  .link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    background: linear-gradient(currentColor, currentColor) no-repeat 0 calc(50% + 0.85em) / 100% 1px;
+    transition: background-size 0.5s var(--ease-out-expo);
+  }
+  .link:hover {
+    background-size: 0 1px;
+    background-position-x: 100%;
+  }
+  .nav-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    background: linear-gradient(currentColor, currentColor) no-repeat 100% calc(50% + 0.85em) / 0 1px;
+    transition: background-size 0.5s var(--ease-out-expo);
+  }
+  .nav-link:hover,
+  .nav-link[aria-current='page'] {
+    background-size: 100% 1px;
+    background-position-x: 0;
+  }
+}
+
+/* —— the tour —— */
+.tour-track {
+  height: calc((var(--units) * var(--unit) + 100) * 1lvh);
+}
+.tour-stage {
+  position: sticky;
+  top: 0;
+  height: 100lvh;
+  overflow: hidden;
+  background: var(--color-anthracite);
+}
+/* copy lives in the part of the stage a phone always shows, whatever its toolbars do */
+.tour-safe {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 100svh;
+}
+.scene-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  isolation: isolate;
+  padding: 7rem var(--edge) clamp(2rem, 6vh, 4.5rem);
+  padding-right: calc(var(--edge) + 1.25rem);
+}
+.scene-box::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 -12lvh;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgb(20 20 21 / 0.42), transparent 22%),
+    linear-gradient(to top, rgb(20 20 21 / 0.78), rgb(20 20 21 / 0.28) 42%, transparent 68%);
+}
+.scene-box[data-place='top-left']::before {
+  background: linear-gradient(to bottom, rgb(20 20 21 / 0.74), rgb(20 20 21 / 0.3) 46%, transparent 72%);
+}
+.scene-box[data-place='middle-left']::before {
+  background:
+    linear-gradient(to bottom, rgb(20 20 21 / 0.42), transparent 22%),
+    linear-gradient(to right, rgb(20 20 21 / 0.7), rgb(20 20 21 / 0.25) 55%, transparent 80%);
+}
+.scene-box[data-place='bottom-left'],
+.scene-box[data-place='bottom-right'] {
+  align-items: flex-end;
+}
+.scene-box[data-place='middle-left'] {
+  align-items: flex-end;
+}
+.scene-box[data-place='top-left'] {
+  align-items: flex-start;
+}
+@media (min-width: 48rem) {
+  .scene-box {
+    padding-right: calc(var(--edge) + 5.5rem);
+  }
+  .scene-box[data-place='middle-left'] {
+    align-items: center;
+  }
+  .scene-box[data-place='bottom-right'] {
+    justify-content: flex-end;
+    text-align: right;
+  }
+  .scene-box[data-place='bottom-right'] .scene-copy > * {
+    margin-left: auto;
+  }
+}
+.scene-copy {
+  max-width: min(100%, 68rem);
+}
+
+/* film grain: hides the softness of 720p footage on large screens */
+.grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* static tour (reduced motion): one still per screen */
+.still {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+  isolation: isolate;
+}
+.still .scene-box {
+  position: relative;
+  min-height: 100svh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+@keyframes drop {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(200%);
+  }
+}
