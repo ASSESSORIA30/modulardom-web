@@ -5,7 +5,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Lines } from '@/components/ui/Lines';
 import { Still } from '@/components/ui/Still';
-import type { Dictionary, Locale } from '@/content/i18n';
+import { href, type Dictionary, type Locale } from '@/content/i18n';
 import { PRICE_CLAIM } from '@/content/site';
 import { STATIONS, progressOf, type Station } from '@/content/tour';
 import { scrollToY } from '@/lib/scroll';
@@ -61,10 +61,10 @@ function StationCopy({ station, index, dict, lang }: Props & { station: Station;
         )}
         {station.actions && (
           <div className="mt-7 flex flex-wrap items-center gap-x-7 gap-y-2 max-md:hidden md:mt-8" data-fade>
-            <Link href={`/${lang}/configurador`} className="btn btn-paper">
+            <Link href={href(lang, 'configurator')} className="btn btn-paper">
               {dict.ui.configure}
             </Link>
-            <Link href={`/${lang}/projectes`} className="link text-[0.9375rem]">
+            <Link href={href(lang, 'projects')} className="link text-[0.9375rem]">
               {dict.ui.projects}
             </Link>
           </div>

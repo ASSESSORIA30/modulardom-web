@@ -1,9 +1,10 @@
 'use client';
 import { useState } from 'react';
+import { LeadForm } from '@/components/ui/LeadForm';
 import { Reveal } from '@/components/ui/Reveal';
 import type { Dictionary, Locale } from '@/content/i18n';
 import { MINERAL_MODELS } from '@/content/mineral';
-import { submitLead } from '@/lib/crm';
+import { waHref } from '@/content/site';
 
 /*
   ModularDom MINERAL: the bungalow line for campsites and resorts. A different client (a business
@@ -17,32 +18,13 @@ import { submitLead } from '@/lib/crm';
 
 const MAX_DRAWN = 48;
 
-export function Mineral({ dict, lang }: { dict: Dictionary; lang: Locale }) {
+export function Mineral({ dict, lang, as: Heading = 'h2' }: { dict: Dictionary; lang: Locale; as?: 'h1' | 'h2' }) {
   const m = dict.mineral;
   const f = m.form;
   const [kind, setKind] = useState(0);
   const [units, setUnits] = useState(12);
-  const [state, setState] = useState<'idle' | 'sending' | 'ready' | 'error'>('idle');
-  const [missing, setMissing] = useState<string[]>([]);
   const clamp = (n: number) => Math.min(500, Math.max(1, Math.round(n) || 1));
-
-  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const data = new FormData(e.currentTarget);
-    const get = (k: string) => String(data.get(k) ?? '').trim();
-    const bad = ['name', 'email'].filter((k) => !get(k) || (k === 'email' && !/^\S+@\S+\.\S+$/.test(get(k))));
-    setMissing(bad);
-    if (bad.length) {
-      (e.currentTarget.elements.namedItem(bad[0]) as HTMLElement)?.focus();
-      return;
-    }
-    setState('sending');
-    const res = await submitLead({
-      source: 'mineral', locale: lang, name: get('name'), company: get('company'), email: get('email'), phone: get('phone'), message: get('message'),
-      data: { establishment: f.kind.options[kind], units },
-    });
-    setState(res.ok ? 'ready' : 'error');
-  };
+  const wa = waHref(dict.whatsapp.mineral);
 
   return (
     <section className="mineral" data-theme="light" aria-labelledby="mineral">
@@ -53,13 +35,13 @@ export function Mineral({ dict, lang }: { dict: Dictionary; lang: Locale }) {
             <span className="h-px w-10 bg-current" aria-hidden="true" />
             <span>Mineral</span>
           </p>
-          <h2 id="mineral" className="m-title mt-8">
+          <Heading id="mineral" className="m-title mt-8">
             {m.title.map((l) => (
               <span key={l} className="line">
                 <span data-line>{l}</span>
               </span>
             ))}
-          </h2>
+          </Heading>
           <p className="t-lead mt-6 max-w-[34ch] opacity-80" data-fade style={{ '--i': 2 } as React.CSSProperties}>
             {m.text}
           </p>
@@ -82,6 +64,44 @@ export function Mineral({ dict, lang }: { dict: Dictionary; lang: Locale }) {
               </li>
             ))}
           </ul>
+        )}
+
+        {MINERAL_MODELS.length > 1 && (
+          <div className="overflow-x-auto md:col-span-12">
+            <table className="w-full min-w-[36rem] border-collapse text-left text-[0.9375rem]">
+              <caption className="m-mark mb-4 text-left">{m.compare}</caption>
+              <thead>
+                <tr>
+                  <th scope="col" className="border-b border-current/40 py-3 pr-6 font-medium" />
+                  {MINERAL_MODELS.map((x) => (
+                    <th key={x.id} scope="col" className="border-b border-current/40 py-3 pr-6 font-medium">
+                      {x.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(
+                  [
+                    [m.slots[3].name, (x) => (x.surface ? `${x.surface} m²` : '—')],
+                    [m.slots[2].name, (x) => x.layout?.[lang] ?? '—'],
+                    [m.slots[4].name, (x) => x.finishes?.[lang].join(', ') ?? '—'],
+                  ] as [string, (x: (typeof MINERAL_MODELS)[number]) => string][]
+                ).map(([label, get]) => (
+                  <tr key={label}>
+                    <th scope="row" className="border-b border-current/20 py-3 pr-6 font-normal opacity-75">
+                      {label}
+                    </th>
+                    {MINERAL_MODELS.map((x) => (
+                      <td key={x.id} className="border-b border-current/20 py-3 pr-6">
+                        {get(x)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* until then: what the catalogue will hold, as a specification sheet with its rows still open */}
@@ -110,7 +130,19 @@ export function Mineral({ dict, lang }: { dict: Dictionary; lang: Locale }) {
             {units > MAX_DRAWN && <p className="t-note t-num mt-2 opacity-70">+ {units - MAX_DRAWN}</p>}
           </div>
 
-          <form onSubmit={submit} noValidate className="mt-10 grid gap-x-8 gap-y-6 md:col-span-6 md:col-start-7 md:mt-0 md:grid-cols-2">
+          <LeadForm
+            kind="mineral"
+            dict={dict}
+            lang={lang}
+            fields={['company', 'phone', 'city', 'message']}
+            required={['company']}
+            extra={() => ({ establishment: f.kind.options[kind], units })}
+            submit={f.submit}
+            buttonClass="btn btn-slate"
+            chipOn="border-slate bg-slate text-mineral"
+            chipOff="border-current/30"
+            className="mt-10 md:col-span-6 md:col-start-7 md:mt-0"
+          >
             <fieldset className="md:col-span-2">
               <legend className="mb-2 text-[0.8125rem] opacity-75">{f.kind.label}</legend>
               <div className="flex flex-wrap gap-2">
@@ -127,49 +159,21 @@ export function Mineral({ dict, lang }: { dict: Dictionary; lang: Locale }) {
                 {f.units}
               </label>
               <div className="flex w-fit items-stretch border border-current/30">
-                <button type="button" onClick={() => setUnits((u) => clamp(u - 1))} aria-label="−1" className="min-h-11 w-12 text-xl transition-transform duration-150 active:scale-90">
+                <button type="button" onClick={() => setUnits((u) => clamp(u - 1))} aria-label={`${f.units} −1`} className="min-h-11 w-12 text-xl transition-transform duration-150 active:scale-90">
                   −
                 </button>
                 <input id="m-units" inputMode="numeric" value={units} onChange={(e) => setUnits(clamp(+e.target.value.replace(/\D/g, '')))} className="t-num w-20 border-x border-current/30 bg-transparent text-center text-[1.125rem] font-medium" />
-                <button type="button" onClick={() => setUnits((u) => clamp(u + 1))} aria-label="+1" className="min-h-11 w-12 text-xl transition-transform duration-150 active:scale-90">
+                <button type="button" onClick={() => setUnits((u) => clamp(u + 1))} aria-label={`${f.units} +1`} className="min-h-11 w-12 text-xl transition-transform duration-150 active:scale-90">
                   +
                 </button>
               </div>
+              {wa && (
+                <a href={wa} target="_blank" rel="noopener noreferrer" className="link mt-4 text-[0.9375rem]">
+                  {dict.ui.whatsapp}
+                </a>
+              )}
             </div>
-            {(['name', 'company', 'email', 'phone'] as const).map((k) => (
-              <label key={k} className="field">
-                <span>
-                  {f[k]}
-                  {(k === 'name' || k === 'email') && <span aria-hidden="true"> *</span>}
-                </span>
-                <input
-                  name={k}
-                  type={k === 'email' ? 'email' : k === 'phone' ? 'tel' : 'text'}
-                  autoComplete={k === 'name' ? 'name' : k === 'company' ? 'organization' : k === 'email' ? 'email' : 'tel'}
-                  required={k === 'name' || k === 'email'}
-                  aria-invalid={missing.includes(k) || undefined}
-                  aria-describedby={missing.includes(k) ? `m-err-${k}` : undefined}
-                />
-                {missing.includes(k) && (
-                  <span id={`m-err-${k}`} className="!opacity-100 text-[#a3351f]">
-                    {f.required}
-                  </span>
-                )}
-              </label>
-            ))}
-            <label className="field md:col-span-2">
-              <span>{f.message}</span>
-              <textarea name="message" rows={3} />
-            </label>
-            <div className="md:col-span-2">
-              <button type="submit" disabled={state === 'sending'} className="btn btn-ink disabled:opacity-60" style={{ '--btn-bg': 'var(--color-slate)', '--btn-line': 'var(--color-slate)' } as React.CSSProperties}>
-                {f.submit}
-              </button>
-              <p role="status" className="t-note mt-4 max-w-[46ch]">
-                {state === 'ready' ? f.ready : state === 'error' ? f.error : ''}
-              </p>
-            </div>
-          </form>
+          </LeadForm>
         </div>
       </div>
     </section>

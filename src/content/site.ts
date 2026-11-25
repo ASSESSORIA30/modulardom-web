@@ -20,8 +20,10 @@ export const COMPANY = {
 /** Commercial claim in the hero. Off until the commercial conditions are validated. */
 export const PRICE_CLAIM = { enabled: false, amount: '993', unit: '€/m²' };
 
-/** Budgets in the configurator. Off: needs the tariff published by ModularDom's CRM (src/lib/configurator/tariff.ts). */
-export const PRICING: { enabled: boolean; tariffUrl: string | null } = { enabled: false, tariffUrl: null };
+/*
+  Budgets in the configurator are switched on the server, not here: see src/server/env.ts
+  (CRM_TARIFF_URL and PRICING_PUBLIC). Nothing about prices lives in code the browser receives.
+*/
 
 /**
  * The logotype. The only file ModularDom publishes is a 200 px PNG (public/brand/modulardom-200.png),
@@ -33,8 +35,14 @@ export const LOGO: { src: string | null; width: number; height: number; badge: s
 /** WhatsApp button. The number is the one on modulardom.com; the button stays off until ModularDom authorises it. */
 export const WHATSAPP: { enabled: boolean; number: string | null } = { enabled: false, number: '34684784887' };
 
-/** Lead forms post here once the CRM is connected (see src/lib/crm.ts). */
-export const CRM: { enabled: boolean; endpoint: string | null } = { enabled: false, endpoint: null };
+/**
+ * The clients' area is the CRM's own portal (it already has its login and roles): the site only
+ * links to it. Off until ModularDom confirms the address and that clients have their access.
+ */
+export const CLIENT_AREA: { enabled: boolean; url: string } = { enabled: false, url: 'https://crmmodulardom.vercel.app/portal' };
+
+/** a wa.me link that opens with a message fitting where the visitor is */
+export const waHref = (message: string) => (WHATSAPP.enabled && WHATSAPP.number ? `https://wa.me/${WHATSAPP.number}?text=${encodeURIComponent(message)}` : null);
 
 /*
   The closing picture. `03-mansio-nocturna.png` is still not in the repository, so a frame of the

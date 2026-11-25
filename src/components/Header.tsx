@@ -2,8 +2,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { LOCALES, NAV, type Dictionary, type Locale } from '@/content/i18n';
-import { LOGO } from '@/content/site';
+import { LOCALES, MENU, NAV, href, type Dictionary, type Locale } from '@/content/i18n';
+import { CLIENT_AREA, LOGO } from '@/content/site';
 import { stopScroll } from '@/lib/scroll';
 
 type Props = { dict: Dictionary; lang: Locale };
@@ -73,7 +73,10 @@ export function Header({ dict, lang }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const rest = pathname.replace(/^\/(ca|es)/, '');
+  // the same page in the other language has its own address
+  const slug = pathname.split('/')[2] ?? '';
+  const here = NAV.find((n) => n.slug[lang] === slug);
+  const other = (l: Locale) => (here ? href(l, here.key) : `/${l}`);
   const tone = open || !light ? 'text-paper' : 'text-ink';
 
   const languages = (
@@ -82,7 +85,7 @@ export function Header({ dict, lang }: Props) {
         <li key={l} className="flex items-center">
           {i > 0 && <span className="mx-0.5 h-3 w-px bg-current opacity-35" aria-hidden="true" />}
           <Link
-            href={`/${l}${rest}`}
+            href={other(l)}
             hrefLang={l}
             lang={l}
             aria-current={l === lang ? 'true' : undefined}
@@ -106,10 +109,10 @@ export function Header({ dict, lang }: Props) {
             <Logo />
           </Link>
           <div className="flex items-center gap-2 md:gap-6">
-            <Link href={`/${lang}/contacte`} className="link hidden text-[0.9375rem] md:inline-flex">
+            <Link href={href(lang, 'contact')} className="link hidden text-[0.9375rem] md:inline-flex">
               {dict.ui.contactShort}
             </Link>
-            <Link href={`/${lang}/configurador`} className={`btn btn-sm hidden md:inline-flex ${open || !light ? 'btn-line' : 'btn-line-ink'}`}>
+            <Link href={href(lang, 'configurator')} className={`btn btn-sm hidden md:inline-flex ${open || !light ? 'btn-line' : 'btn-line-ink'}`}>
               {dict.ui.configureShort}
             </Link>
             <div className="hidden sm:block">{languages}</div>
@@ -152,11 +155,12 @@ export function Header({ dict, lang }: Props) {
         <div className="wrap grid min-h-full content-end gap-10 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-28 md:grid-cols-12 md:gap-x-10 md:pb-16">
           <nav aria-label={dict.ui.menu} className="md:col-span-8">
             <ul className="md:columns-2 md:gap-x-12">
-              {NAV.map((n, i) => (
+              {MENU.map((n, i) => (
                 <li key={n.key} className="break-inside-avoid overflow-hidden border-b border-paper/15">
                   <Link
-                    href={`/${lang}/${n.slug}`}
-                    aria-current={rest === `/${n.slug}` ? 'page' : undefined}
+                    // the clients' area is ModularDom's CRM portal, once it is switched on
+                    href={n.key === 'clients' && CLIENT_AREA.enabled ? CLIENT_AREA.url : href(lang, n.key)}
+                    aria-current={here?.key === n.key ? 'page' : undefined}
                     className="group flex min-h-[3.9rem] items-center gap-5 t-serif text-[clamp(1.6rem,1.15rem+1.7vw,2.5rem)] leading-tight"
                     style={{
                       // each row rises out of its own rule, later the lower it is; on closing they simply go
@@ -174,10 +178,10 @@ export function Header({ dict, lang }: Props) {
           </nav>
           <div className="flex flex-wrap items-end justify-between gap-6 md:col-span-3 md:col-start-10 md:flex-col md:items-start md:justify-end">
             <div className="flex flex-col items-start gap-1">
-              <Link href={`/${lang}/configurador`} className="btn btn-paper">
+              <Link href={href(lang, 'configurator')} className="btn btn-paper">
                 {dict.ui.configure}
               </Link>
-              <Link href={`/${lang}/contacte`} className="link text-[0.9375rem]">
+              <Link href={href(lang, 'contact')} className="link text-[0.9375rem]">
                 {dict.ui.contact}
               </Link>
             </div>
@@ -191,10 +195,10 @@ export function Header({ dict, lang }: Props) {
         className={`glass fixed inset-x-0 bottom-0 z-30 grid grid-cols-[1.4fr_1fr] gap-2 border-t border-paper/10 bg-ink/80 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 text-paper backdrop-blur-xl transition-transform duration-500 ease-[var(--ease-drawer)] md:hidden ${docked && !open ? '' : 'translate-y-full'}`}
         inert={!docked || open}
       >
-        <Link href={`/${lang}/configurador`} className="btn btn-sm btn-paper">
+        <Link href={href(lang, 'configurator')} className="btn btn-sm btn-paper">
           {dict.ui.configure}
         </Link>
-        <Link href={`/${lang}/contacte`} className="btn btn-sm btn-line">
+        <Link href={href(lang, 'contact')} className="btn btn-sm btn-line">
           {dict.ui.contactShort}
         </Link>
       </div>

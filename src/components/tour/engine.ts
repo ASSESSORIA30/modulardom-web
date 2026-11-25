@@ -14,6 +14,11 @@ import { TOUR, focusAt, frameAt, tourUrl, type Tier } from '@/content/tour';
             screen refresh. So a run of frames ahead of the camera (and the frame it is heading
             for) is decoded off the main thread into bitmaps, and drawing is only ever a blit.
             When the camera outruns the decoders, every 2nd, 4th … frame is prepared instead.
+  Proxies   Every frame also exists at a quarter of the pixels (xs / xp, about 10 KB, decoded in a
+            few milliseconds). They are fetched in the background and decoded just ahead of the
+            camera. When a full frame is not ready for where the camera is, its proxy is shown
+            instead of a sharper frame from further back: in fast travel the picture stays exactly
+            under the hand, slightly soft, and sharpens the moment the camera slows.
   Sizes     sm 864x1536 for phones, md 1920 for landscape. Screens that can show more get 2560:
             · strong machines (6+ cores, 8+ GB, a fast line) scrub the whole tour at 2560, and step
               down to 1920 by themselves if decoding cannot keep up;
@@ -39,7 +44,10 @@ const OMEGA = { wheel: 30, touch: 17 };
 const CORES = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
 const DECODERS = Math.max(1, Math.min(4, CORES - 2));
 
-type Scrub = Exclude<Tier, never>;
+type Scrub = 'md' | 'sm' | 'hd';
+// proxies decoded round the camera: about 1.3 MB of pixels each
+const PROXY_AHEAD = 30;
+const PROXY_BEHIND = 8;
 
 export class TourEngine {
   /** camera position on the tour, 0 → 1 */
@@ -47,6 +55,8 @@ export class TourEngine {
   frame = 0;
   /** the frame actually on the canvas (it can trail `frame` by a few while decoding catches up) */
   shown = -1;
+  /** whether that frame is a proxy (for the checks) */
+  shownProxy = false;
   /** the size being scrubbed */
   tier: Scrub = 'md';
   private v = 0;
@@ -76,6 +86,12 @@ export class TourEngine {
   private engaged = false;
   private timings: number[] = [];
   private bitmaps = new Map<number, ImageBitmap>();
+  /* the same frames at a quarter of the pixels */
+  private pBlobs = new Map<number, Blob>();
+  private pAsked = new Set<number>();
+  private pActive = 0;
+  private pBitmaps = new Map<number, ImageBitmap>();
+  private pDecoding = new Set<number>();
   private decoding = new Set<number>();
   private decodeMs = 24;
   private decodes = 0;
@@ -138,8 +154,20 @@ export class TourEngine {
     this.pump();
   }
 
+  private get proxyTier(): 'xs' | 'xp' {
+    return this.tier === 'sm' ? 'xp' : 'xs';
+  }
+
   private setTier(tier: Scrub) {
+    const turned = (tier === 'sm') !== (this.tier === 'sm');
     this.tier = tier;
+    if (turned) {
+      for (const bm of this.pBitmaps.values()) bm.close();
+      this.pBitmaps.clear();
+      this.pDecoding.clear();
+      this.pBlobs.clear();
+      this.pAsked.clear();
+    }
     this.gen++;
     this.imgs.clear();
     this.asked.clear();
@@ -212,6 +240,9 @@ export class TourEngine {
 
   destroy() {
     this.dead = true;
+    for (const bm of this.pBitmaps.values()) bm.close();
+    this.pBitmaps.clear();
+    this.pBlobs.clear();
     window.clearTimeout(this.restTimer);
     this.imgs.clear();
     this.dropBitmaps();
@@ -329,8 +360,95 @@ export class TourEngine {
     return null;
   }
 
+  /** fetch every proxy, nearest to the camera first: they are small enough to hold them all */
+  private pumpProxies() {
+    if (this.dead || !this.first) return;
+    const step = this.stride >= 4 ? 2 : 1;
+    while (this.pActive < 5) {
+      let pick = -1;
+      const c = Math.round(this.frame / step) * step;
+      for (let d = 0; d < TOUR.count && pick < 0; d += step) {
+        for (const i of this.dir > 0 ? [c + d, c - d] : [c - d, c + d]) {
+          if (i >= 0 && i < TOUR.count && !this.pAsked.has(i)) {
+            pick = i;
+            break;
+          }
+        }
+      }
+      if (pick < 0) return;
+      const i = pick;
+      const gen = this.gen;
+      const tier = this.proxyTier;
+      this.pAsked.add(i);
+      this.pActive++;
+      fetch(tourUrl(tier, i))
+        .then((r) => (r.ok ? r.blob() : null))
+        .then(
+          (b) => b,
+          () => null,
+        )
+        .then((blob) => {
+          this.pActive--;
+          if (this.dead) return;
+          if (blob && tier === this.proxyTier) {
+            this.pBlobs.set(i, blob);
+            if (Math.abs(i - this.frame) <= PROXY_AHEAD) this.planProxies();
+          } else if (gen === this.gen) this.pAsked.delete(i);
+          this.pumpProxies();
+        });
+    }
+  }
+
+  /** keep a run of proxies decoded just round the camera */
+  private planProxies() {
+    if (this.dead) return;
+    const lo = this.frame - (this.dir > 0 ? PROXY_BEHIND : PROXY_AHEAD);
+    const hi = this.frame + (this.dir > 0 ? PROXY_AHEAD : PROXY_BEHIND);
+    // where the scroll already is: the camera will pass through there within moments
+    const goal = frameAt(this.target);
+    for (const [i, bm] of this.pBitmaps) {
+      const between = (i - this.frame) * (goal - i) >= 0; // on the way from the camera to the goal
+      if ((i < lo - 4 || i > hi + 4) && Math.abs(i - goal) > 6 && !between) {
+        bm.close();
+        this.pBitmaps.delete(i);
+      }
+    }
+    // nothing to prepare while the camera rests on a full frame
+    if (this.speed === 0 && this.bitmaps.has(this.frame)) return;
+    // in a long jump, lay proxies along the way at a stride the decoders can keep up with
+    const span = Math.abs(goal - this.frame);
+    const stride = span > PROXY_AHEAD ? Math.ceil(span / PROXY_AHEAD) : 1;
+    const want: number[] = [this.frame, goal];
+    for (let d = 1; d <= PROXY_AHEAD; d++) want.push(this.frame + d * stride * this.dir);
+    for (let d = 1; d <= PROXY_BEHIND; d++) want.push(this.frame - d * this.dir);
+    for (const i of want) {
+      {
+        if (this.pDecoding.size >= 3) break;
+        if (i < 0 || i >= TOUR.count || this.pBitmaps.has(i) || this.pDecoding.has(i)) continue;
+        if (stride === 1 && (i < lo || i > hi) && i !== goal) continue;
+        const blob = this.pBlobs.get(i);
+        if (!blob) continue;
+        const tier = this.proxyTier;
+        this.pDecoding.add(i);
+        createImageBitmap(blob).then(
+          (bm) => {
+            this.pDecoding.delete(i);
+            if (this.dead || tier !== this.proxyTier || this.pBitmaps.size > PROXY_AHEAD + PROXY_BEHIND + 16) return bm.close();
+            this.pBitmaps.set(i, bm);
+            if (Math.abs(i - this.frame) <= 3) this.dirty = true;
+            this.planProxies();
+          },
+          () => {
+            this.pDecoding.delete(i);
+          },
+        );
+      }
+    }
+  }
+
   private plan() {
     if (this.dead) return;
+    this.planProxies();
     const s = this.stepSize();
     const ahead = Math.floor(this.budget * 0.7) * s;
     const behind = Math.floor(this.budget * 0.15) * s;
@@ -426,12 +544,21 @@ export class TourEngine {
 
   /* —— drawing —— */
 
-  private pick(): { img: ImageBitmap; frame: number } | null {
+  private pick(): { img: ImageBitmap; frame: number; proxy: boolean } | null {
     const f = this.frame;
-    // this frame if it is decoded, else the closest one that is
-    let best = -1;
-    for (const i of this.bitmaps.keys()) if (best < 0 || Math.abs(i - f) < Math.abs(best - f)) best = i;
-    return best < 0 ? null : { img: this.bitmaps.get(best)!, frame: best };
+    const near = (m: Map<number, ImageBitmap>) => {
+      let best = -1;
+      for (const i of m.keys()) if (best < 0 || Math.abs(i - f) < Math.abs(best - f)) best = i;
+      return best;
+    };
+    const full = near(this.bitmaps);
+    const proxy = near(this.pBitmaps);
+    const dFull = full < 0 ? Infinity : Math.abs(full - f);
+    const dProxy = proxy < 0 ? Infinity : Math.abs(proxy - f);
+    // a full frame within a frame of the camera always wins; beyond that, whichever is truer to
+    // where the camera is (a soft frame in the right place beats a sharp one from behind)
+    if (dFull <= 1 || dFull <= dProxy) return full < 0 ? null : { img: this.bitmaps.get(full)!, frame: full, proxy: false };
+    return { img: this.pBitmaps.get(proxy)!, frame: proxy, proxy: true };
   }
 
   private blit(img: ImageBitmap, frame: number) {
@@ -442,7 +569,8 @@ export class TourEngine {
     const sw = cw / scale;
     const sh = ch / scale;
     // object-fit: cover, held on the subject; sm frames are already cut round it
-    const fx = this.tier === 'sm' ? 0.5 : focusAt(frame);
+    // sm and xp frames are already cut round the subject
+    const fx = img.width < img.height ? 0.5 : focusAt(frame);
     const sx = Math.min(Math.max(img.width * fx - sw / 2, 0), img.width - sw);
     ctx.drawImage(img, sx, (img.height - sh) / 2, sw, sh, 0, 0, cw, ch);
   }
@@ -450,15 +578,16 @@ export class TourEngine {
   private draw() {
     const got = this.pick();
     if (!got) return; // nothing loaded yet: the poster underneath stays
-    // keep asking until the exact frame is what is on screen
-    this.dirty = got.frame !== this.frame;
+    // keep asking until the exact full frame is what is on screen
+    this.dirty = got.frame !== this.frame || got.proxy;
     const { canvas, ctx } = this;
-    const hd = this.hd && this.hd.frame === this.frame && got.frame === this.frame ? this.hd : null;
+    const hd = this.hd && this.hd.frame === this.frame && got.frame === this.frame && !got.proxy ? this.hd : null;
     const fade = hd ? Math.min(1, (performance.now() - hd.since) / FADE_MS) : 0;
-    const key = `${this.tier}${got.frame}|${hd ? fade.toFixed(3) : ''}|${canvas.width}x${canvas.height}`;
+    const key = `${got.proxy ? 'p' : this.tier}${got.frame}|${hd ? fade.toFixed(3) : ''}|${canvas.width}x${canvas.height}`;
     if (key === this.drawn) return;
     this.drawn = key;
     this.shown = got.frame;
+    this.shownProxy = got.proxy;
     ctx.imageSmoothingQuality = this.speed === 0 ? 'high' : 'medium';
     if (fade < 1) this.blit(got.img, got.frame);
     if (hd) {
@@ -470,6 +599,7 @@ export class TourEngine {
     if (!this.first) {
       this.first = true;
       this.onFirstFrame();
+      this.pumpProxies();
       if (this.refineAtRest) this.restTimer = window.setTimeout(() => this.refine(), REST_MS * 4);
     }
   }

@@ -17,9 +17,13 @@ export type Project = {
   surface?: number;
   year?: number;
   system?: 'cellular' | 'timber';
+  /** a paragraph about the house, in both languages */
+  description?: { ca: string; es: string };
+  /** floor plans (PDF or image paths under /public) */
+  plans?: string[];
   /** short facts, already translated: { ca: [...], es: [...] } */
   features?: { ca: string[]; es: string[] };
-  /** paths under /public, first one is the cover */
+  /** real photographs only: paths under /public, first one is the cover */
   images: string[];
 };
 

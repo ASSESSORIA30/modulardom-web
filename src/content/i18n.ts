@@ -2,17 +2,24 @@ export const LOCALES = ['ca', 'es'] as const;
 export type Locale = (typeof LOCALES)[number];
 export const isLocale = (v: string): v is Locale => (LOCALES as readonly string[]).includes(v);
 
+/** every page of the site, with a descriptive address in each language */
 export const NAV = [
-  { key: 'homes', slug: 'cases-a-mida' },
-  { key: 'projects', slug: 'projectes' },
-  { key: 'systems', slug: 'sistemes-constructius' },
-  { key: 'configurator', slug: 'configurador' },
-  { key: 'mineral', slug: 'mineral' },
-  { key: 'process', slug: 'com-treballem' },
-  { key: 'about', slug: 'qui-som' },
-  { key: 'contact', slug: 'contacte' },
-  { key: 'clients', slug: 'area-de-clients' },
+  { key: 'homes', slug: { ca: 'cases-a-mida', es: 'casas-a-medida' } },
+  { key: 'projects', slug: { ca: 'projectes', es: 'proyectos' } },
+  { key: 'systems', slug: { ca: 'sistemes-constructius', es: 'sistemas-constructivos' } },
+  { key: 'configurator', slug: { ca: 'configurador', es: 'configurador' } },
+  { key: 'mineral', slug: { ca: 'mineral', es: 'mineral' } },
+  { key: 'process', slug: { ca: 'com-treballem', es: 'como-trabajamos' } },
+  { key: 'about', slug: { ca: 'qui-som', es: 'quienes-somos' } },
+  { key: 'contact', slug: { ca: 'contacte', es: 'contacto' } },
+  { key: 'clients', slug: { ca: 'area-de-clients', es: 'area-de-clientes' } },
+  { key: 'privacy', slug: { ca: 'privacitat', es: 'privacidad' } },
 ] as const;
+/** pages with their own file under app/[lang]/ (the folder is the Catalan slug); the rest share the holding page */
+export const BUILT: readonly string[] = ['projects', 'configurator', 'mineral', 'contact'];
+/** shown in menus (privacy lives in the footer line) */
+export const MENU = NAV.filter((n) => n.key !== 'privacy');
+export const href = (lang: Locale, key: NavKey, query = '') => `/${lang}/${NAV.find((n) => n.key === key)!.slug[lang]}${query}`;
 export type NavKey = (typeof NAV)[number]['key'];
 
 export type StationId = 'exterior' | 'entrada' | 'interior' | 'cuina';
@@ -66,17 +73,23 @@ export type Dictionary = {
   mineral: {
     name: string; title: string[]; text: string; audience: string; catalogue: string;
     slots: { name: string; text: string }[];
-    form: {
-      title: string; kind: Choice; units: string; name: string; company: string; email: string; phone: string;
-      message: string; submit: string; ready: string; error: string; required: string;
-    };
+    form: { title: string; kind: Choice; units: string; submit: string };
+    compare: string;
   };
+  /** one line per page, for search results: only what is verifiably true */
+  seo: Record<NavKey, string>;
+  forms: {
+    name: string; email: string; phone: string; city: string; company: string; message: string;
+    plot: Choice; plotNote: string; consent: string; privacy: string;
+    required: string; invalidEmail: string; invalidPhone: string; needConsent: string;
+    sending: string; sent: string; notSent: string; error: string; rate: string;
+  };
+  request: { title: string; text: string; submit: string; dossier: string; dossierError: string; preparing: string };
+  whatsapp: { general: string; configurator: string; visit: string; mineral: string };
+  projectsPage: { title: string[]; emptyTitle: string; emptyText: string; plans: string };
   closing: {
     title: string[]; text: string; showHouse: string; write: string; call: string;
-    form: {
-      title: string; motive: Choice; name: string; email: string; phone: string; message: string;
-      submit: string; ready: string; error: string; required: string;
-    };
+    form: { title: string; motive: Choice; submit: string };
   };
   footer: { legal: string };
 };
@@ -88,7 +101,7 @@ const ca: Dictionary = {
   },
   nav: {
     homes: 'Cases a mida', projects: 'Projectes', systems: 'Sistemes constructius', configurator: 'Configurador',
-    mineral: 'ModularDom MINERAL', process: 'Com treballem', about: 'Qui som', contact: 'Contacte', clients: 'Àrea de clients',
+    mineral: 'ModularDom MINERAL', process: 'Com treballem', about: 'Qui som', contact: 'Contacte', clients: 'Àrea de clients', privacy: 'Privacitat',
   },
   ui: {
     menu: 'Menú', close: 'Tanca', skip: 'Vés al contingut', language: 'Idioma', tour: 'Recorregut per la casa',
@@ -211,27 +224,59 @@ const ca: Dictionary = {
     form: {
       title: 'Sol·licita un pressupost professional',
       kind: { label: 'Establiment', options: ['Càmping', 'Complex turístic', 'Altres'] },
-      units: 'Unitats', name: 'Nom i cognoms', company: 'Empresa', email: 'Correu electrònic', phone: 'Telèfon',
-      message: 'Explica’ns el projecte', submit: 'Sol·licita pressupost',
-      ready: 'Sol·licitud preparada. L’enviament s’activarà quan connectem el CRM; ara no s’ha enviat res.',
-      error: 'No s’ha pogut enviar. Torna-ho a provar.', required: 'Cal omplir aquest camp.',
+      units: 'Unitats', submit: 'Sol·licita pressupost',
     },
+    compare: 'Comparativa de models',
   },
   closing: {
     title: ['L’arquitectura', '*de viure.*'],
     text: 'Explica’ns com vols viure-hi. La dissenyem a mida i te l’entreguem clau en mà.',
     showHouse: 'Casa pilot visitable a Bellvís (Lleida).',
     write: 'Escriu-nos', call: 'Truca’ns',
-    form: {
-      title: 'Parlem de casa teva',
-      motive: { label: 'Què necessites?', options: ['Informació', 'Visitar la casa pilot'] },
-      name: 'Nom i cognoms', email: 'Correu electrònic', phone: 'Telèfon', message: 'Explica’ns què tens al cap',
-      submit: 'Envia la sol·licitud',
-      ready: 'Sol·licitud preparada. L’enviament s’activarà quan connectem el CRM; ara no s’ha enviat res.',
-      error: 'No s’ha pogut enviar. Torna-ho a provar.', required: 'Cal omplir aquest camp.',
-    },
+    form: { title: 'Parlem de casa teva', motive: { label: 'Què necessites?', options: ['Informació', 'Visitar la casa pilot'] }, submit: 'Envia la sol·licitud' },
   },
-  footer: { legal: 'Avís legal i privacitat: en preparació.' },
+  seo: {
+    homes: 'Cases a mida, eficients i clau en mà.',
+    projects: 'Els projectes de ModularDom.',
+    systems: 'Formigó cel·lular i entramat lleuger de fusta: els dos sistemes constructius de ModularDom.',
+    configurator: 'Configura casa teva: superfície, distribució, cuina, garatge, climatització i extres.',
+    mineral: 'ModularDom MINERAL: bungalows de formigó cel·lular per a càmpings i complexos turístics.',
+    process: 'Com treballem, del primer contacte a l’entrega de l’habitatge.',
+    about: 'Qui és ModularDom.',
+    contact: 'Contacta amb ModularDom o reserva una visita a la casa pilot de Bellvís (Lleida).',
+    clients: 'Accés a l’àrea de clients de ModularDom.',
+    privacy: 'Política de privacitat de ModularDom.',
+  },
+  forms: {
+    name: 'Nom i cognoms', email: 'Correu electrònic', phone: 'Telèfon', city: 'Municipi', company: 'Empresa', message: 'Observacions',
+    plot: { label: 'Terreny', options: ['Ja en tinc', 'Encara no', 'En busco'] },
+    plotNote: 'On és el terreny? (opcional)',
+    consent: 'He llegit i accepto la', privacy: 'política de privacitat',
+    required: 'Cal omplir aquest camp.', invalidEmail: 'Aquest correu no sembla correcte.', invalidPhone: 'Cal un telèfon de 9 xifres com a mínim.', needConsent: 'Cal acceptar la política de privacitat.',
+    sending: 'Enviant…',
+    sent: 'Sol·licitud rebuda. Referència: {ref}.',
+    notSent: 'Ara mateix la web encara no pot rebre sol·licituds i no s’ha enviat res. Escriu-nos a {email} o truca’ns al {phone}.',
+    error: 'No s’ha pogut enviar. Torna-ho a provar o escriu-nos a {email}.',
+    rate: 'Massa intents seguits. Torna-ho a provar d’aquí a uns minuts.',
+  },
+  request: {
+    title: 'Rep el teu pressupost',
+    text: 'Deixa’ns les teves dades i l’equip de ModularDom et prepara el pressupost d’aquesta configuració.',
+    submit: 'Sol·licita el pressupost', dossier: 'Descarrega el dossier (PDF)', dossierError: 'No s’ha pogut generar el dossier. Torna-ho a provar.', preparing: 'Preparant el dossier…',
+  },
+  whatsapp: {
+    general: 'Hola, voldria informació sobre les cases de ModularDom.',
+    configurator: 'Hola, he fet una configuració a la web i voldria un pressupost.',
+    visit: 'Hola, voldria visitar la casa pilot de Bellvís.',
+    mineral: 'Hola, voldria informació sobre els bungalows MINERAL per al meu establiment.',
+  },
+  projectsPage: {
+    title: ['Projectes'],
+    emptyTitle: 'Aviat hi publicarem les obres de ModularDom.',
+    emptyText: 'Mentrestant, pots recórrer la casa conceptual a la portada o demanar-nos informació.',
+    plans: 'Plànols',
+  },
+  footer: { legal: 'Privacitat' },
 };
 
 const es: Dictionary = {
@@ -241,7 +286,7 @@ const es: Dictionary = {
   },
   nav: {
     homes: 'Casas a medida', projects: 'Proyectos', systems: 'Sistemas constructivos', configurator: 'Configurador',
-    mineral: 'ModularDom MINERAL', process: 'Cómo trabajamos', about: 'Quiénes somos', contact: 'Contacto', clients: 'Área de clientes',
+    mineral: 'ModularDom MINERAL', process: 'Cómo trabajamos', about: 'Quiénes somos', contact: 'Contacto', clients: 'Área de clientes', privacy: 'Privacidad',
   },
   ui: {
     menu: 'Menú', close: 'Cerrar', skip: 'Ir al contenido', language: 'Idioma', tour: 'Recorrido por la casa',
@@ -364,27 +409,59 @@ const es: Dictionary = {
     form: {
       title: 'Solicita un presupuesto profesional',
       kind: { label: 'Establecimiento', options: ['Camping', 'Complejo turístico', 'Otros'] },
-      units: 'Unidades', name: 'Nombre y apellidos', company: 'Empresa', email: 'Correo electrónico', phone: 'Teléfono',
-      message: 'Cuéntanos el proyecto', submit: 'Solicita presupuesto',
-      ready: 'Solicitud preparada. El envío se activará cuando conectemos el CRM; ahora no se ha enviado nada.',
-      error: 'No se ha podido enviar. Inténtalo de nuevo.', required: 'Hay que rellenar este campo.',
+      units: 'Unidades', submit: 'Solicita presupuesto',
     },
+    compare: 'Comparativa de modelos',
   },
   closing: {
     title: ['La arquitectura', '*de vivir.*'],
     text: 'Cuéntanos cómo quieres vivir en ella. La diseñamos a medida y te la entregamos llave en mano.',
     showHouse: 'Casa piloto visitable en Bellvís (Lleida).',
     write: 'Escríbenos', call: 'Llámanos',
-    form: {
-      title: 'Hablemos de tu casa',
-      motive: { label: '¿Qué necesitas?', options: ['Información', 'Visitar la casa piloto'] },
-      name: 'Nombre y apellidos', email: 'Correo electrónico', phone: 'Teléfono', message: 'Cuéntanos qué tienes en mente',
-      submit: 'Envía la solicitud',
-      ready: 'Solicitud preparada. El envío se activará cuando conectemos el CRM; ahora no se ha enviado nada.',
-      error: 'No se ha podido enviar. Inténtalo de nuevo.', required: 'Hay que rellenar este campo.',
-    },
+    form: { title: 'Hablemos de tu casa', motive: { label: '¿Qué necesitas?', options: ['Información', 'Visitar la casa piloto'] }, submit: 'Envía la solicitud' },
   },
-  footer: { legal: 'Aviso legal y privacidad: en preparación.' },
+  seo: {
+    homes: 'Casas a medida, eficientes y llave en mano.',
+    projects: 'Los proyectos de ModularDom.',
+    systems: 'Hormigón celular y entramado ligero de madera: los dos sistemas constructivos de ModularDom.',
+    configurator: 'Configura tu casa: superficie, distribución, cocina, garaje, climatización y extras.',
+    mineral: 'ModularDom MINERAL: bungalows de hormigón celular para campings y complejos turísticos.',
+    process: 'Cómo trabajamos, del primer contacto a la entrega de la vivienda.',
+    about: 'Quién es ModularDom.',
+    contact: 'Contacta con ModularDom o reserva una visita a la casa piloto de Bellvís (Lleida).',
+    clients: 'Acceso al área de clientes de ModularDom.',
+    privacy: 'Política de privacidad de ModularDom.',
+  },
+  forms: {
+    name: 'Nombre y apellidos', email: 'Correo electrónico', phone: 'Teléfono', city: 'Municipio', company: 'Empresa', message: 'Observaciones',
+    plot: { label: 'Terreno', options: ['Ya tengo', 'Aún no', 'Estoy buscando'] },
+    plotNote: '¿Dónde está el terreno? (opcional)',
+    consent: 'He leído y acepto la', privacy: 'política de privacidad',
+    required: 'Hay que rellenar este campo.', invalidEmail: 'Este correo no parece correcto.', invalidPhone: 'Hace falta un teléfono de 9 cifras como mínimo.', needConsent: 'Hay que aceptar la política de privacidad.',
+    sending: 'Enviando…',
+    sent: 'Solicitud recibida. Referencia: {ref}.',
+    notSent: 'Ahora mismo la web aún no puede recibir solicitudes y no se ha enviado nada. Escríbenos a {email} o llámanos al {phone}.',
+    error: 'No se ha podido enviar. Inténtalo de nuevo o escríbenos a {email}.',
+    rate: 'Demasiados intentos seguidos. Inténtalo de nuevo dentro de unos minutos.',
+  },
+  request: {
+    title: 'Recibe tu presupuesto',
+    text: 'Déjanos tus datos y el equipo de ModularDom te prepara el presupuesto de esta configuración.',
+    submit: 'Solicita el presupuesto', dossier: 'Descarga el dossier (PDF)', dossierError: 'No se ha podido generar el dossier. Inténtalo de nuevo.', preparing: 'Preparando el dossier…',
+  },
+  whatsapp: {
+    general: 'Hola, quería información sobre las casas de ModularDom.',
+    configurator: 'Hola, he hecho una configuración en la web y quería un presupuesto.',
+    visit: 'Hola, quería visitar la casa piloto de Bellvís.',
+    mineral: 'Hola, quería información sobre los bungalows MINERAL para mi establecimiento.',
+  },
+  projectsPage: {
+    title: ['Proyectos'],
+    emptyTitle: 'Pronto publicaremos aquí las obras de ModularDom.',
+    emptyText: 'Mientras tanto, puedes recorrer la casa conceptual en la portada o pedirnos información.',
+    plans: 'Planos',
+  },
+  footer: { legal: 'Privacidad' },
 };
 
 export const dictionaries: Record<Locale, Dictionary> = { ca, es };

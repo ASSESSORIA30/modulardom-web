@@ -5,9 +5,10 @@ import { HouseCanvas } from '@/components/house3d/HouseCanvas';
 import type { HouseConfig, HouseScene } from '@/components/house3d/scene';
 import { Lines } from '@/components/ui/Lines';
 import { Reveal } from '@/components/ui/Reveal';
-import type { Dictionary, Locale } from '@/content/i18n';
-import { calculate, validateInput, type EngineInput, type Quote, type Tariff } from '@/lib/configurator/engine';
-import { loadTariff } from '@/lib/configurator/tariff';
+import { LeadForm } from '@/components/ui/LeadForm';
+import { href, type Dictionary, type Locale } from '@/content/i18n';
+import { waHref } from '@/content/site';
+import type { EngineInput } from '@/lib/configurator/engine';
 
 /*
   The configurator: the model on the left, the decisions on the right, each one changing the model.
@@ -17,8 +18,12 @@ import { loadTariff } from '@/lib/configurator/tariff';
   company's budget engine (src/lib/configurator/engine.ts). Three more (system, façade, roof) and
   the massing only change the model and are settled in the project.
 
-  No price is shown: the tariff lives in ModularDom's CRM and none is shipped here. When one is
-  supplied (PRICING in src/content/site.ts) the breakdown appears under the decisions.
+  Prices: the browser never holds a tariff or a formula. It sends the choices to /api/quote and
+  shows what comes back; while prices are switched off on the server, that is nothing, and the
+  page says the budget is prepared by ModularDom's team.
+
+  `full` (the /configurador page) adds the request form and the PDF dossier, and starts from the
+  choices carried in the link.
 */
 
 const SURFACE = { min: 100, max: 400, step: 10, initial: 180 };
@@ -31,6 +36,9 @@ type State = {
   vehicles: number; climate: boolean[]; extras: boolean[];
   system: number; facade: number; roof: number;
 };
+/** what the server lets a visitor see of a budget (src/server/quote.ts) */
+type PublicQuote = { tariff: string; validDays: number; lines: { key: string; label: { ca: string; es: string }; detail?: { ca: string; es: string }; amountCents: number }[]; subtotalCents: number; vatWorksCents: number; vatArchitectCents: number; totalCents: number };
+
 const INITIAL: State = { surface: SURFACE.initial, floors: 1, volume: 0, bedrooms: 3, bathrooms: 2, suite: 1, kitchen: 1, vehicles: 0, climate: [true, false], extras: [false, false, false, false], system: 0, facade: 0, roof: 0 };
 
 const chip = (on: boolean) =>
@@ -94,17 +102,41 @@ function Stepper({ label, value, min, max, zero, onChange }: { label: string; va
   );
 }
 
-export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale }) {
+const clampInt = (v: string | null, min: number, max: number, fallback: number) => {
+  const n = v === null ? NaN : parseInt(v, 10);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
+
+export function Configurator({ dict, lang, full = false }: { dict: Dictionary; lang: Locale; full?: boolean }) {
   const c = dict.configurator;
   const scene = useRef<HouseScene | null>(null);
   const [open, setOpen] = useState(0);
   const [s, setS] = useState<State>(INITIAL);
-  const [tariff, setTariff] = useState<Tariff | null>(null);
+  const [quote, setQuote] = useState<PublicQuote | null>(null);
+  const [dossier, setDossier] = useState<'idle' | 'busy' | 'error'>('idle');
+  const request = useRef<HTMLDivElement>(null);
   const set = (patch: Partial<State>) => setS((v) => ({ ...v, ...patch }));
 
+  // arriving from the home page: start from the choices carried in the link
   useEffect(() => {
-    loadTariff().then(setTariff);
-  }, []);
+    if (!full) return;
+    const q = new URLSearchParams(location.search);
+    if (![...q.keys()].length) return;
+    const list = (k: string) => (q.get(k) ?? '').split('-');
+    setS((v) => ({
+      ...v,
+      surface: Math.round(clampInt(q.get('metres'), SURFACE.min, SURFACE.max, v.surface) / SURFACE.step) * SURFACE.step,
+      bedrooms: clampInt(q.get('habitacions'), 1, 6, v.bedrooms),
+      bathrooms: clampInt(q.get('banys'), 1, 4, v.bathrooms),
+      suite: Math.max(0, ['sin', 'bano', 'bano_vestidor'].indexOf(q.get('suite') ?? '')) || (q.get('suite') === 'sin' ? 0 : v.suite),
+      kitchen: q.get('cuina') === 'basica' ? 0 : q.get('cuina') === 'isla' ? 1 : v.kitchen,
+      vehicles: clampInt(q.get('vehicles'), 0, 4, v.vehicles),
+      climate: q.has('installacions') ? CLIMATE.map((k) => list('installacions').includes(k)) : v.climate,
+      extras: q.has('extres') ? [q.get('safareig') === '1', ...EXTRAS.map((k) => list('extres').includes(k))] : v.extras,
+      floors: q.get('plantes') === '1' ? 0 : q.get('plantes') === '2' ? 1 : v.floors,
+      system: q.get('sistema') === 'timber' ? 1 : q.get('sistema') === 'cellular' ? 0 : v.system,
+    }));
+  }, [full]);
 
   // the same answers, three ways: for the model, for the budget engine, for the link
   const model = useMemo(
@@ -136,7 +168,51 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
     }),
     [s],
   );
-  const quote: Quote | null = useMemo(() => (tariff && validateInput(tariff, input).length === 0 ? calculate(tariff, input) : null), [tariff, input]);
+  const visual = useMemo(
+    () => ({ floors: s.floors + 1, system: model.system, facade: model.finish, roof: model.roof, volume: model.volume }),
+    [s.floors, model],
+  );
+
+  // the budget is computed on the server; ask again a moment after the last change
+  useEffect(() => {
+    const ctl = new AbortController();
+    const t = window.setTimeout(() => {
+      fetch('/api/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: ctl.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { enabled?: boolean; quote?: PublicQuote } | null) => setQuote(d?.enabled && d.quote ? d.quote : null))
+        .catch(() => {});
+    }, 350);
+    return () => {
+      window.clearTimeout(t);
+      ctl.abort();
+    };
+  }, [input]);
+
+  const download = async () => {
+    setDossier('busy');
+    try {
+      const res = await fetch('/api/dossier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // if the visitor has already typed who they are, the dossier is made out to them
+        body: JSON.stringify({
+          lang, config: input, visual, image: scene.current?.snapshot() ?? null,
+          name: request.current?.querySelector<HTMLInputElement>('input[name=name]')?.value || null,
+          city: request.current?.querySelector<HTMLInputElement>('input[name=city]')?.value || null,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ModularDom-${res.headers.get('X-Reference') ?? 'dossier'}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setDossier('idle');
+    } catch {
+      setDossier('error');
+    }
+  };
 
   useEffect(() => {
     scene.current?.setConfig(model);
@@ -293,9 +369,15 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
             <p className="t-note mb-5 text-gold-light" data-fade>
               {c.name}
             </p>
+            {full ? (
+              <h1 id="configurador" className="t-title">
+                <Lines lines={c.title} />
+              </h1>
+            ) : (
             <h2 id="configurador" className="t-title">
               <Lines lines={c.title} />
             </h2>
+            )}
             <p className="t-lead mt-5 max-w-[34ch] text-paper/75" data-fade style={{ '--i': 2 } as React.CSSProperties}>
               {c.text}
             </p>
@@ -336,8 +418,8 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
                 {(
                   [
                     [c.quote.subtotal, quote.subtotalCents],
-                    [c.quote.vatWorks, quote.ivaObraCents],
-                    [c.quote.vatArch, quote.ivaArqCents],
+                    [c.quote.vatWorks, quote.vatWorksCents],
+                    [c.quote.vatArch, quote.vatArchitectCents],
                   ] as const
                 ).map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-6 border-t border-paper/15 py-2 text-paper/80">
@@ -355,9 +437,44 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
           ) : (
             <p className="t-note mt-6 max-w-[40ch] text-paper/70">{c.noPrice}</p>
           )}
-          <Link href={`/${lang}/configurador?${q}`} className="btn btn-paper mt-6">
-            {c.send}
-          </Link>
+          {!full && (
+            <Link href={href(lang, 'configurator', `?${q}`)} className="btn btn-paper mt-6">
+              {c.send}
+            </Link>
+          )}
+
+          {full && (
+            <div ref={request} className="mt-12 border-t border-paper/20 pt-10">
+              <h3 className="t-serif text-[clamp(1.6rem,1.2rem+1.4vw,2.2rem)] leading-tight">{dict.request.title}</h3>
+              <p className="mt-3 max-w-[40ch] text-paper/75">{dict.request.text}</p>
+              <LeadForm
+                kind="quote"
+                dict={dict}
+                lang={lang}
+                fields={['phone', 'city', 'plot', 'message']}
+                required={['phone']}
+                extra={() => ({ config: input, visual })}
+                submit={dict.request.submit}
+                buttonClass="btn btn-paper"
+                chipOn="border-paper bg-paper text-ink"
+                chipOff="border-paper/30 hover:border-paper"
+                className="mt-8"
+              />
+              <div className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-2 border-t border-paper/20 pt-6">
+                <button type="button" onClick={download} disabled={dossier === 'busy'} className="btn btn-line disabled:opacity-60">
+                  {dossier === 'busy' ? dict.request.preparing : dict.request.dossier}
+                </button>
+                {waHref(dict.whatsapp.configurator) && (
+                  <a href={waHref(dict.whatsapp.configurator)!} target="_blank" rel="noopener noreferrer" className="link text-[0.9375rem]">
+                    {dict.ui.whatsapp}
+                  </a>
+                )}
+                <p role="status" className="t-note w-full text-paper/80">
+                  {dossier === 'error' ? dict.request.dossierError : ''}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>

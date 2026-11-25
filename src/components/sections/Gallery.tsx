@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Still } from '@/components/ui/Still';
-import type { Dictionary, Locale } from '@/content/i18n';
+import { href, type Dictionary, type Locale } from '@/content/i18n';
 import { CONCEPT_SPACES, PROJECTS } from '@/content/projects';
 
 /*
@@ -182,7 +182,7 @@ export function Gallery({ dict, lang }: { dict: Dictionary; lang: Locale }) {
               <li className="flex h-[52svh] shrink-0 snap-start items-center pl-2 pr-[6vw] md:h-[66svh]">
                 <div className="max-w-[18rem]">
                   <p className="t-serif text-[1.75rem] leading-tight">{dict.projects.title.join(' ').replace(/\*/g, '')}</p>
-                  <Link href={`/${lang}/projectes`} className="btn btn-line-ink mt-6" draggable={false}>
+                  <Link href={href(lang, 'projects')} className="btn btn-line-ink mt-6" draggable={false}>
                     {dict.ui.projects}
                   </Link>
                 </div>

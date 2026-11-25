@@ -16,7 +16,7 @@ type Manifest = {
   /** map[i]: frame i's place on a 0 → 1 line of even camera travel */
   map: number[];
 };
-export type Tier = 'md' | 'sm' | 'hd';
+export type Tier = 'md' | 'sm' | 'hd' | 'xs' | 'xp';
 export const TOUR = manifest as unknown as Manifest;
 
 /** bump when frames are rebuilt: they are cached for a year */

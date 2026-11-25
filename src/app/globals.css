@@ -711,3 +711,19 @@ a {
     animation: none;
   }
 }
+
+.field-error {
+  font-size: 0.8125rem;
+  opacity: 1 !important;
+  color: var(--field-error, #b3402a);
+}
+[data-theme='dark'] .field-error {
+  --field-error: #f0a08c;
+}
+.btn-slate {
+  --btn-bg: var(--color-slate);
+  --btn-fg: var(--color-mineral);
+  --btn-line: var(--color-slate);
+  --btn-fill: var(--color-gold);
+  --btn-fg-hover: var(--color-ink);
+}

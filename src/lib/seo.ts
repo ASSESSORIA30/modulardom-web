@@ -1,0 +1,41 @@
+import type { Metadata } from 'next';
+import { LOCALES, NAV, dictionaries, href, type Locale, type NavKey } from '@/content/i18n';
+import { COMPANY } from '@/content/site';
+
+/** title, description, canonical and the same page in the other language, for one page of the menu */
+export function pageMeta(lang: Locale, key: NavKey): Metadata {
+  const dict = dictionaries[lang];
+  const title = `${dict.nav[key]} · ModularDom`;
+  const description = dict.seo[key];
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: href(lang, key),
+      languages: { ...Object.fromEntries(LOCALES.map((l) => [l, href(l, key)])), 'x-default': href('ca', key) },
+    },
+    openGraph: { title, description, url: href(lang, key), locale: lang === 'ca' ? 'ca_ES' : 'es_ES', siteName: 'ModularDom', type: 'website' },
+  };
+}
+
+/** every address of the site, for the sitemap */
+export const allPaths = () => LOCALES.flatMap((l) => [{ lang: l, path: `/${l}`, key: null as NavKey | null }, ...NAV.map((n) => ({ lang: l, path: href(l, n.key), key: n.key as NavKey | null }))]);
+
+/**
+ * Structured data: the company, with only what ModularDom itself publishes (legal name, tax id,
+ * e-mail, phone, province). No ratings, prices, certifications or opening hours are stated.
+ */
+export const organizationJsonLd = (siteUrl: string, lang: Locale) => ({
+  '@context': 'https://schema.org',
+  '@type': 'HomeAndConstructionBusiness',
+  name: 'ModularDom',
+  legalName: COMPANY.legalName,
+  taxID: COMPANY.taxId,
+  url: `${siteUrl}/${lang}`,
+  logo: `${siteUrl}/brand/modulardom-200.png`,
+  email: COMPANY.email,
+  telephone: COMPANY.phone,
+  address: { '@type': 'PostalAddress', addressRegion: COMPANY.region, addressCountry: 'ES' },
+  areaServed: 'ES',
+  inLanguage: lang,
+});

@@ -44,6 +44,10 @@ const TIERS = {
   md: { w: 1920, h: 1080, q: 52 },
   sm: { w: 864, h: 1536, q: 52 },
   hd: { w: 2560, h: 1440, q: 56 },
+  // proxies: a quarter of the pixels, decoded in a few milliseconds. Shown only while the camera
+  // moves faster than full frames can be decoded, so the picture never falls behind the hand.
+  xs: { w: 768, h: 432, q: 46 },
+  xp: { w: 432, h: 768, q: 46 },
 };
 const SHARP = 'unsharp=3:3:0.3:3:3:0'; // a touch of acutance after the downscale, luma only
 
@@ -125,6 +129,8 @@ if (all) {
     const filters = {
       md: `scale=${md.w}:${md.h}:flags=lanczos,${SHARP}`,
       sm: `crop=${cropW}:2160:${x}:0,scale=${sm.w}:${sm.h}:flags=lanczos,${SHARP}`,
+      xs: `scale=${TIERS.xs.w}:${TIERS.xs.h}:flags=bicubic`,
+      xp: `crop=${cropW}:2160:${x}:0,scale=${TIERS.xp.w}:${TIERS.xp.h}:flags=bicubic`,
       hd: `scale=${hd.w}:${hd.h}:flags=lanczos,${SHARP}`,
     };
     for (const t of Object.keys(TIERS)) {

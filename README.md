@@ -1,4 +1,4 @@
-# ModularDom — web corporativa (V4)
+# ModularDom — web corporativa (V5)
 
 Next.js (App Router) · TypeScript · Tailwind CSS 4 · GSAP ScrollTrigger · Lenis · three.js.
 
@@ -6,6 +6,7 @@ Next.js (App Router) · TypeScript · Tailwind CSS 4 · GSAP ScrollTrigger · Le
 npm install
 npm run dev        # http://localhost:3000  →  /ca, /es
 npm run build
+npm test           # motor de pressupost (paritat amb l'original) i regles del servidor
 ```
 
 ## Estructura de la portada
@@ -37,19 +38,20 @@ Memòria de qualitats: text publicat al configurador actual. Paleta: blau marí,
 Logotip: l'únic fitxer publicat és un PNG de 200 px (`public/brand/`), usat a la icona i al peu.
 Els «proyectos realizados» de la web actual semblen renders i **no** s'utilitzen com a obres reals.
 
-## Configurador i pressupost
+## Configurador, pressupost, formularis i dossier
 
-Les preguntes són les del configurador actual de ModularDom. `engine.ts` és el seu motor de càlcul,
-portat línia per línia. **No hi ha cap preu al repositori**: la tarifa es publica des del CRM.
-Per activar el pressupost: `PRICING.enabled` i `PRICING.tariffUrl` (JSON amb la forma de `Tariff`).
+- Pàgines pròpies: `/configurador`, `/projectes` (`/es/proyectos`), `/mineral`, `/contacte` (`/es/contacto`).
+- Les preguntes són les del configurador actual de ModularDom; `src/lib/configurator/engine.ts` és el seu
+  motor, portat línia per línia i provat contra l'original (`tests/engine.test.ts`).
+- **Cap preu al repositori ni al navegador.** El servidor llegeix la tarifa del CRM i `POST /api/quote`
+  només retorna imports finals. `POST /api/lead` valida, filtra spam i signa; `POST /api/dossier` fa el PDF.
+- Tot està apagat per defecte. Com s'activa: `docs/operations.md`. Contracte amb el CRM: `docs/crm-integration.md`.
 
-## Coses a activar quan hi hagi dades o autorització
+## Interruptors de contingut (`src/content/site.ts`)
 
-- **Reclam de preu** («des de 993 €/m²»): `PRICE_CLAIM.enabled`.
-- **Logotip vectorial** a la capçalera: fitxer a `public/brand/` i `LOGO.src`.
-- **WhatsApp**: `WHATSAPP.enabled` (el número ja hi és).
-- **CRM**: `CRM.endpoint` + `CRM.enabled`; tots els formularis passen per `submitLead()`.
-- **Imatge nocturna**: `public/stills/closing.webp` i `CLOSING`.
+Reclam de preu («des de 993 €/m²») · logotip vectorial · WhatsApp (número verificat, botó apagat) ·
+àrea de clients (enllaç al portal del CRM, apagat) · imatge nocturna de tancament.
+Obres reals: `src/content/projects.ts`. Models MINERAL: `src/content/mineral.ts`.
 
 ## El muntatge del recorregut
 

@@ -219,12 +219,17 @@ export type HouseScene = {
   setConfig(c: Partial<HouseConfig>): void;
   /** radians added to the camera's turn (drag) */
   setTurn(a: number): void;
+  /** the model as it stands, as a JPEG data URL (for the dossier) */
+  snapshot(): string | null;
   resize(): void;
   setActive(on: boolean): void;
   dispose(): void;
 };
 
-export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layers' | 'config' }): HouseScene {
+/** hands the main thread back between the stages of building the model, so a scroll in progress never waits on it */
+const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
+
+export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layers' | 'config' }): Promise<HouseScene> {
   seed = 7;
   const layers = opts.mode === 'layers';
   const small = Math.min(window.innerWidth, window.innerHeight) < 600;
@@ -240,7 +245,9 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
   const env = makeEnvironment(renderer);
   scene.environment = env;
   scene.environmentIntensity = 0.9;
+  await breathe();
   const tex = makeTextures();
+  await breathe();
   const camera = new THREE.PerspectiveCamera(21, 1, 1, 260);
   const root = new THREE.Group(); // the house: stretches with the chosen surface
   const site = new THREE.Group(); // the plot: stays put
@@ -317,6 +324,7 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
 
   // walls, layer by layer
   for (const w of WALLS) {
+    await breathe();
     const base = { vol: w.vol, n: w.n } as const;
     add(blocks(w), M.block, { ...base, layer: 'structure', system: 'cellular' }, 0.07);
     add(studs(w), M.timber, { ...base, layer: 'structure', system: 'timber' }, 0.16);
@@ -426,6 +434,8 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
     M.duct,
     { layer: 'services', vol: 'U', n: none },
   );
+
+  await breathe();
 
   /* —— the ground the model stands on —— */
   // a contact shadow: the soft dark where the model meets its base, independent of the sun
@@ -717,6 +727,7 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
   };
   resize();
   apply();
+  await breathe();
   renderer.compileAsync(scene, camera).then(ready, ready);
 
   return {
@@ -746,6 +757,20 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
     setTurn(a) {
       st.turnT = a;
       wake();
+    },
+    snapshot() {
+      if (!compiled) return null;
+      // draw and read in the same task: the drawing buffer is only guaranteed until the browser composites
+      apply();
+      renderer.render(scene, camera);
+      const flat = document.createElement('canvas');
+      flat.width = canvas.width;
+      flat.height = canvas.height;
+      const c2 = flat.getContext('2d')!;
+      c2.fillStyle = '#0d1520';
+      c2.fillRect(0, 0, flat.width, flat.height);
+      c2.drawImage(canvas, 0, 0);
+      return flat.toDataURL('image/jpeg', 0.86);
     },
     resize,
     setActive(on) {

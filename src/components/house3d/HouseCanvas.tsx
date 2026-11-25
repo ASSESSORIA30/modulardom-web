@@ -38,7 +38,11 @@ export function HouseCanvas({ mode, className, label, fallback, onReady }: Props
           await new Promise<void>((r) => ('requestIdleCallback' in window ? requestIdleCallback(() => r(), { timeout: 1200 }) : setTimeout(r, 60)));
           if (cancelled) return;
           try {
-            scene = createHouseScene(el, { mode });
+            scene = await createHouseScene(el, { mode });
+            if (cancelled) {
+              scene.dispose();
+              return;
+            }
           } catch {
             setFailed(true);
             return;
