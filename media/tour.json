@@ -257,6 +257,94 @@
       "name": "closing-standin",
       "frame": 1,
       "width": 2560
+    },
+    {
+      "name": "mat-lamel",
+      "frame": 475,
+      "width": 1000,
+      "crop": [
+        0.64,
+        0.1,
+        0.2,
+        0.62
+      ]
+    },
+    {
+      "name": "mat-paviment",
+      "frame": 357,
+      "width": 1000,
+      "crop": [
+        0.6,
+        0.56,
+        0.2,
+        0.44
+      ]
+    },
+    {
+      "name": "mat-graons",
+      "frame": 135,
+      "width": 1000,
+      "crop": [
+        0.5,
+        0.6,
+        0.2,
+        0.4
+      ]
+    },
+    {
+      "name": "mat-panells",
+      "frame": 545,
+      "width": 1000,
+      "crop": [
+        0.72,
+        0.14,
+        0.2,
+        0.62
+      ]
+    },
+    {
+      "name": "mat-mur",
+      "frame": 222,
+      "width": 1000,
+      "crop": [
+        0.14,
+        0.04,
+        0.2,
+        0.6
+      ]
+    },
+    {
+      "name": "mat-porta",
+      "frame": 160,
+      "width": 1100,
+      "crop": [
+        0.34,
+        0.04,
+        0.3,
+        0.88
+      ]
+    },
+    {
+      "name": "mat-llum",
+      "frame": 300,
+      "width": 1000,
+      "crop": [
+        0.08,
+        0.0,
+        0.26,
+        0.5
+      ]
+    },
+    {
+      "name": "mat-textil",
+      "frame": 357,
+      "width": 1000,
+      "crop": [
+        0.5,
+        0.5,
+        0.22,
+        0.46
+      ]
     }
   ]
 }

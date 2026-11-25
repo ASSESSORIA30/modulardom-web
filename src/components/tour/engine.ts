@@ -3,50 +3,60 @@ import { TOUR, focusAt, frameAt, tourUrl, type Tier } from '@/content/tour';
 /*
   TourEngine — one long frame sequence on one canvas.
 
-  Motion    The scroll sets a target; the camera follows it like a body with mass (an exponential
-            ease, frame-rate independent), so it glides, settles, and reverses without a jolt.
+  Camera    The scroll sets a target; the camera follows it as a critically damped spring. It
+            starts moving in the same frame as the hand, carries its velocity through a change of
+            direction, and settles without overshoot. Wheel and trackpad arrive already eased by
+            Lenis, so the spring is stiff there; touch arrives raw, so it is softer.
   Loading   Coarse to fine. Every 64th frame of the whole tour first, down to every 8th: within a
-            second or two any point can be scrubbed. The frames in between load only round the
-            camera, further ahead in its direction of travel than behind.
-  Decoding  Drawing a compressed picture means decoding it first, and a 1080p decode is longer than
-            a screen refresh. So a short run of frames ahead of the camera is decoded in the
-            background into bitmaps, and drawing is only ever a blit. When the camera moves faster
-            than frames can be decoded, every 2nd, 4th or 8th is prepared instead, so the picture
-            keeps up with the hand; when it slows, the exact frame arrives within a few
-            milliseconds.
-  Memory    The bitmap run is capped (about 200 MB of pixels on a desktop, 90 MB on a phone) and
-            bitmaps behind the camera are closed. Compressed frames far from the camera are
-            dropped too (the coarse grid stays); files remain in the HTTP cache.
-  Sizes     md 1920 for landscape, sm 864x1536 for phones. On large or dense screens, when the
-            camera rests, the single frame on screen is replaced by its 2560 version.
-  Budget    Data saver, 2g/3g or little memory: every 2nd or 4th frame, fewer parallel requests,
-            no 2560 pass.
+            second or two any point can be scrubbed. The frames in between load round the camera,
+            further ahead the faster it travels.
+  Decoding  Drawing a compressed picture means decoding it first, and a decode is longer than a
+            screen refresh. So a run of frames ahead of the camera (and the frame it is heading
+            for) is decoded off the main thread into bitmaps, and drawing is only ever a blit.
+            When the camera outruns the decoders, every 2nd, 4th … frame is prepared instead.
+  Sizes     sm 864x1536 for phones, md 1920 for landscape. Screens that can show more get 2560:
+            · strong machines (8+ cores, 8+ GB, a fast line) scrub the whole tour at 2560, and step
+              down to 1920 by themselves if decoding cannot keep up;
+            · the others scrub at 1920 and, when the camera rests, the 2560 frame fades in over it
+              (a fade, not a swap, so sharpness never jumps).
+  Memory    The bitmap run is capped by pixels (90–320 MB by device) and closed behind the camera.
+            Compressed frames far from the camera are dropped (the coarse grid stays).
+  Budget    Data saver, 2g/3g, little memory, or first frames that arrive slowly: every 2nd or 4th
+            frame, fewer parallel requests, never 2560.
 */
 
 const COARSE = [64, 32, 16, 8];
 const FINE = [4, 2, 1];
-const AHEAD = 110;
-const BEHIND = 50;
+const AHEAD = 96;
+const BEHIND = 44;
 const IDLE_AHEAD = 30; // before the first scroll
-const KEEP = 190; // fine frames further than this from the camera are released
-const TAU = 0.115; // seconds: how long the camera takes to close ~63% of the gap to the scroll
-const REST_MS = 170;
+const KEEP = 140; // compressed frames further than this from the camera are released
+const REST_MS = 140;
+const FADE_MS = 260;
+// spring stiffness (rad/s): how eagerly the camera closes on the scroll
+const OMEGA = { wheel: 24, touch: 15 };
 // decoders running at once: leave cores for the page itself
-const DECODERS = Math.max(1, Math.min(3, (typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4) - 2));
+const CORES = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
+const DECODERS = Math.max(1, Math.min(4, CORES - 2));
+
+type Scrub = Exclude<Tier, never>;
 
 export class TourEngine {
-  /** smoothed tour progress, 0 → 1 */
+  /** camera position on the tour, 0 → 1 */
   p = 0;
   frame = 0;
   /** the frame actually on the canvas (it can trail `frame` by a few while decoding catches up) */
   shown = -1;
+  /** the size being scrubbed */
+  tier: Scrub = 'md';
+  private v = 0;
   private target = 0;
+  private omega = OMEGA.wheel;
   private ctx: CanvasRenderingContext2D;
   /** compressed frames, as downloaded */
   private imgs = new Map<number, Blob>();
   private asked = new Set<number>();
   private active = 0;
-  private tier: Exclude<Tier, 'hd'> = 'md';
   private gen = 0;
   private dir = 1;
   private drawn = '';
@@ -54,21 +64,25 @@ export class TourEngine {
   private dead = false;
   private dirty = true;
   private restTimer = 0;
-  private hd: { frame: number; bm: ImageBitmap } | null = null;
-  private hdAllowed = false;
+  private hd: { frame: number; bm: ImageBitmap; since: number } | null = null;
+  private refineAtRest = false;
   private stride: number;
   private parallel: number;
   private slow: boolean;
+  private readonly strong: boolean;
+  private readonly roomy: boolean;
+  private forced: Scrub | null = null;
   /** the visitor has started to scroll: until then, load little beyond the coarse grid */
   private engaged = false;
   private timings: number[] = [];
-  /* decoded frames round the camera */
   private bitmaps = new Map<number, ImageBitmap>();
   private decoding = new Set<number>();
   private decodeMs = 24;
+  private decodes = 0;
   private speed = 0; // frames per second
   private budget = 16; // bitmaps
-  private readonly roomy: boolean;
+  private frameMs = 16;
+  private movingFrames = 0;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -86,16 +100,27 @@ export class TourEngine {
     this.stride = saver || /2g/.test(type) ? 4 : type === '3g' || mem <= 2 ? 2 : 1;
     this.parallel = this.slow ? 3 : 6;
     this.roomy = mem >= 8;
+    this.strong = !this.slow && this.roomy && CORES >= 8;
+    // ?tourtier=hd|md forces a size (for testing on machines that would not choose it)
+    const q = /[?&]tourtier=(hd|md|sm)/.exec(location.search);
+    if (q) this.forced = q[1] as Scrub;
     this.resize();
+  }
+
+  /** touch scrolls arrive raw, wheel and trackpad arrive eased */
+  setInput(kind: 'wheel' | 'touch') {
+    this.omega = OMEGA[kind];
   }
 
   resize() {
     const { clientWidth: w, clientHeight: h } = this.canvas;
     if (!w || !h) return;
-    const tier = w / h <= 0.68 ? 'sm' : 'md';
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-    this.hdAllowed = tier === 'md' && !this.slow && w * dpr >= 2100;
-    const src = TOUR.tiers[this.hdAllowed ? 'hd' : tier];
+    const portrait = w / h <= 0.68;
+    const dense = !portrait && !this.slow && w * dpr >= 2100;
+    const tier: Scrub = this.forced ?? (portrait ? 'sm' : dense && this.strong ? 'hd' : 'md');
+    this.refineAtRest = tier === 'md' && dense;
+    const src = TOUR.tiers[tier === 'md' && dense ? 'hd' : tier];
     // never more canvas pixels than the picture can fill
     const scale = Math.min(dpr, Math.max(src.w / w, src.h / h, 1));
     const cw = Math.round(w * scale);
@@ -104,18 +129,22 @@ export class TourEngine {
       this.canvas.width = cw;
       this.canvas.height = ch;
     }
-    if (tier !== this.tier) {
-      this.tier = tier;
-      this.gen++;
-      this.imgs.clear();
-      this.asked.clear();
-      this.dropBitmaps();
-    }
-    const px = TOUR.tiers[tier].w * TOUR.tiers[tier].h * 4;
-    this.budget = Math.min(28, Math.max(8, Math.floor(((tier === 'md' && this.roomy ? 200 : 90) * 1e6) / px)));
+    if (tier !== this.tier) this.setTier(tier);
+    const px = TOUR.tiers[this.tier].w * TOUR.tiers[this.tier].h * 4;
+    const mb = this.tier === 'sm' ? 90 : this.strong ? 320 : this.roomy ? 200 : 110;
+    this.budget = Math.min(30, Math.max(8, Math.floor((mb * 1e6) / px)));
     this.drawn = '';
     this.dirty = true;
     this.pump();
+  }
+
+  private setTier(tier: Scrub) {
+    this.tier = tier;
+    this.gen++;
+    this.imgs.clear();
+    this.asked.clear();
+    this.dropBitmaps();
+    this.decodes = 0;
   }
 
   setTarget(p: number) {
@@ -131,22 +160,38 @@ export class TourEngine {
   snap(p: number) {
     this.setTarget(p);
     this.p = this.target;
+    this.v = 0;
     this.dirty = true;
   }
 
   /** advance the camera by dt seconds and draw if anything changed */
   step(dt: number) {
     if (this.dead) return;
-    const gap = this.target - this.p;
-    if (gap !== 0) {
-      if (Math.abs(gap) < 0.00004) this.p = this.target;
-      else {
-        this.p += gap * (1 - Math.exp(-dt / TAU));
-        this.dir = gap > 0 ? 1 : -1;
+    const d = this.p - this.target;
+    if (d !== 0 || this.v !== 0) {
+      // critically damped spring, integrated exactly: stable at any frame rate
+      const w = this.omega;
+      const e = Math.exp(-w * dt);
+      const c = this.v + w * d;
+      this.p = this.target + (d + c * dt) * e;
+      this.v = (this.v - w * c * dt) * e;
+      if (Math.abs(this.p - this.target) < 0.00003 && Math.abs(this.v) < 0.0005) {
+        this.p = this.target;
+        this.v = 0;
+      }
+      if (this.v !== 0) this.dir = this.v > 0 ? 1 : -1;
+      // 2560 while moving is only worth it if the screen still refreshes on time: if not, step down
+      if (this.tier === 'hd' && !this.forced) {
+        this.frameMs += (dt * 1000 - this.frameMs) * 0.05;
+        if (++this.movingFrames > 90 && this.frameMs > 21) {
+          this.refineAtRest = true;
+          this.setTier('md');
+          this.pump();
+        }
       }
       const f = frameAt(this.p);
       if (f !== this.frame) {
-        // how fast the camera is going, smoothed: it sets how finely frames are prepared ahead
+        // how fast the camera is going, smoothed: it sets how far ahead and how finely to prepare
         this.speed += (Math.abs(f - this.frame) / Math.max(dt, 0.004) - this.speed) * 0.3;
         this.frame = f;
         this.dirty = true;
@@ -156,13 +201,13 @@ export class TourEngine {
         if (f % 24 === 0) this.release();
       }
       window.clearTimeout(this.restTimer);
-      if (this.hdAllowed) this.restTimer = window.setTimeout(() => this.refine(), REST_MS);
+      if (this.refineAtRest) this.restTimer = window.setTimeout(() => this.refine(), REST_MS);
     } else if (this.speed !== 0) {
       this.speed = 0;
       this.plan(); // at rest: make sure the exact frame is the one on screen
       this.dirty = true;
     }
-    if (this.dirty) this.draw();
+    if (this.dirty || this.hd) this.draw();
   }
 
   destroy() {
@@ -194,7 +239,8 @@ export class TourEngine {
       if (i !== null) return i;
     }
     if (!this.asked.has(TOUR.count - 1)) return TOUR.count - 1;
-    const ahead = this.engaged ? AHEAD : IDLE_AHEAD;
+    // the faster the camera, the further ahead the bytes should already be
+    const ahead = this.engaged ? AHEAD + Math.min(this.speed * 0.5, 120) : IDLE_AHEAD;
     const lo = this.frame - (this.dir > 0 ? BEHIND : ahead);
     const hi = this.frame + (this.dir > 0 ? ahead : BEHIND);
     for (const level of FINE) {
@@ -237,8 +283,8 @@ export class TourEngine {
   }
 
   /**
-   * The browser does not always say the line is slow (and desktop Safari never does). If the first
-   * frames take long to arrive, treat it as slow from here on: every 4th frame, fewer requests, no 2560.
+   * The browser does not always say the line is slow (and Safari never does). If the first frames
+   * take long to arrive, treat it as slow from here on.
    */
   private gauge(ms: number) {
     if (this.slow || this.timings.length >= 6) return;
@@ -249,7 +295,8 @@ export class TourEngine {
       this.slow = true;
       this.stride = 4;
       this.parallel = 3;
-      this.hdAllowed = false;
+      this.refineAtRest = false;
+      if (this.tier === 'hd' && !this.forced) this.setTier('md');
     }
   }
 
@@ -265,7 +312,7 @@ export class TourEngine {
   /* —— decoding ahead —— */
 
   /** every how many frames to prepare, given the camera's speed and how fast this device decodes */
-  private step_(): number {
+  private stepSize(): number {
     const perSecond = (DECODERS / this.decodeMs) * 1000 * 0.75;
     const need = this.speed / perSecond;
     for (const s of [1, 2, 4, 8, 16]) if (need <= s) return s;
@@ -284,7 +331,7 @@ export class TourEngine {
 
   private plan() {
     if (this.dead) return;
-    const s = this.step_();
+    const s = this.stepSize();
     const ahead = Math.floor(this.budget * 0.7) * s;
     const behind = Math.floor(this.budget * 0.15) * s;
     const lo = this.frame - (this.dir > 0 ? behind : ahead);
@@ -327,8 +374,17 @@ export class TourEngine {
     createImageBitmap(img).then(
       (bm) => {
         this.decoding.delete(i);
+        if (this.dead || gen !== this.gen) return bm.close();
         this.decodeMs += (performance.now() - began - this.decodeMs) * 0.2;
-        if (this.dead || gen !== this.gen || this.bitmaps.size > this.budget + 4) return bm.close();
+        // scrubbing at 2560 was a bet on this machine: if its decodes are slow, step down for good
+        if (this.tier === 'hd' && !this.forced && ++this.decodes > 16 && this.decodeMs > 30) {
+          bm.close();
+          this.refineAtRest = true;
+          this.setTier('md');
+          this.pump();
+          return;
+        }
+        if (this.bitmaps.size > this.budget + 4) return bm.close();
         this.bitmaps.set(i, bm);
         this.dirty = true;
         this.plan();
@@ -346,9 +402,9 @@ export class TourEngine {
     this.setHd(null);
   }
 
-  /** the camera has come to rest: fetch this one frame at 2560 and put it on screen */
+  /** the camera has come to rest: fetch this one frame at 2560 and let it fade in */
   private refine() {
-    if (this.dead || !this.hdAllowed || this.p !== this.target) return;
+    if (this.dead || !this.refineAtRest || this.p !== this.target) return;
     const frame = this.frame;
     fetch(tourUrl('hd', frame))
       .then((r) => (r.ok ? r.blob() : Promise.reject()))
@@ -356,27 +412,39 @@ export class TourEngine {
       .then(
         (bm) => {
           if (this.dead || this.frame !== frame || this.p !== this.target) return bm.close();
-          this.setHd({ frame, bm });
-          this.dirty = true;
+          this.setHd({ frame, bm, since: performance.now() });
         },
         () => {},
       );
   }
 
-  private setHd(next: { frame: number; bm: ImageBitmap } | null) {
+  private setHd(next: { frame: number; bm: ImageBitmap; since: number } | null) {
     this.hd?.bm.close();
     this.hd = next;
+    if (!next) this.drawn = '';
   }
 
   /* —— drawing —— */
 
-  private pick(): { img: ImageBitmap; frame: number; key: string } | null {
+  private pick(): { img: ImageBitmap; frame: number } | null {
     const f = this.frame;
-    if (this.hd && this.hd.frame === f) return { img: this.hd.bm, frame: f, key: `hd${f}` };
     // this frame if it is decoded, else the closest one that is
     let best = -1;
     for (const i of this.bitmaps.keys()) if (best < 0 || Math.abs(i - f) < Math.abs(best - f)) best = i;
-    return best < 0 ? null : { img: this.bitmaps.get(best)!, frame: best, key: `b${best}` };
+    return best < 0 ? null : { img: this.bitmaps.get(best)!, frame: best };
+  }
+
+  private blit(img: ImageBitmap, frame: number) {
+    const { canvas, ctx } = this;
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const scale = Math.max(cw / img.width, ch / img.height);
+    const sw = cw / scale;
+    const sh = ch / scale;
+    // object-fit: cover, held on the subject; sm frames are already cut round it
+    const fx = this.tier === 'sm' ? 0.5 : focusAt(frame);
+    const sx = Math.min(Math.max(img.width * fx - sw / 2, 0), img.width - sw);
+    ctx.drawImage(img, sx, (img.height - sh) / 2, sw, sh, 0, 0, cw, ch);
   }
 
   private draw() {
@@ -385,26 +453,24 @@ export class TourEngine {
     // keep asking until the exact frame is what is on screen
     this.dirty = got.frame !== this.frame;
     const { canvas, ctx } = this;
-    const key = `${this.tier}${got.key}|${canvas.width}x${canvas.height}`;
+    const hd = this.hd && this.hd.frame === this.frame && got.frame === this.frame ? this.hd : null;
+    const fade = hd ? Math.min(1, (performance.now() - hd.since) / FADE_MS) : 0;
+    const key = `${this.tier}${got.frame}|${hd ? fade.toFixed(3) : ''}|${canvas.width}x${canvas.height}`;
     if (key === this.drawn) return;
     this.drawn = key;
     this.shown = got.frame;
-    const cw = canvas.width;
-    const ch = canvas.height;
-    const w = got.img.width;
-    const h = got.img.height;
-    const scale = Math.max(cw / w, ch / h);
-    const sw = cw / scale;
-    const sh = ch / scale;
-    // object-fit: cover, held on the subject; sm frames are already cut round it
-    const fx = this.tier === 'sm' ? 0.5 : focusAt(got.frame);
-    const sx = Math.min(Math.max(w * fx - sw / 2, 0), w - sw);
     ctx.imageSmoothingQuality = this.speed === 0 ? 'high' : 'medium';
-    ctx.drawImage(got.img, sx, (h - sh) / 2, sw, sh, 0, 0, cw, ch);
+    if (fade < 1) this.blit(got.img, got.frame);
+    if (hd) {
+      // ease the sharper frame in: no visible switch between moving and resting
+      ctx.globalAlpha = fade * fade * (3 - 2 * fade);
+      this.blit(hd.bm, hd.frame);
+      ctx.globalAlpha = 1;
+    }
     if (!this.first) {
       this.first = true;
       this.onFirstFrame();
-      if (this.hdAllowed) this.restTimer = window.setTimeout(() => this.refine(), REST_MS * 4);
+      if (this.refineAtRest) this.restTimer = window.setTimeout(() => this.refine(), REST_MS * 4);
     }
   }
 }

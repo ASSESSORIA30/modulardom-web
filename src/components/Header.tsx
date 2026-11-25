@@ -3,20 +3,31 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { LOCALES, NAV, type Dictionary, type Locale } from '@/content/i18n';
+import { LOGO } from '@/content/site';
 import { stopScroll } from '@/lib/scroll';
 
 type Props = { dict: Dictionary; lang: Locale };
 
+/** The original logotype once its file is set in src/content/site.ts; the name in type until then. */
+function Logo() {
+  if (LOGO.src) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={LOGO.src} width={LOGO.width} height={LOGO.height} alt="ModularDom" className="h-7 w-auto" />;
+  }
+  return <span className="t-serif text-[1.45rem] leading-none tracking-[-0.01em]">ModularDom</span>;
+}
+
 /*
-  Three things only: the name, the language, the menu. The bar is clear; its ink follows the
-  section underneath (each section declares data-theme). The menu opens as a sheet drawn down
-  from the bar and closes back into it.
+  The bar: the name, then the two things a visitor is most likely to want (the configurator,
+  a way to talk), the language and the menu. It is clear; its ink follows the section underneath
+  (each section declares data-theme). On a phone the two actions move to a dock at the thumb.
+  The menu is a sheet drawn down from the bar: it opens unhurried and closes faster.
 */
 export function Header({ dict, lang }: Props) {
   const pathname = usePathname();
   const [light, setLight] = useState(false);
   const [open, setOpen] = useState(false);
-  const menu = useRef<HTMLDivElement>(null);
+  const [docked, setDocked] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -29,6 +40,9 @@ export function Header({ dict, lang }: Props) {
         if (r.top <= 36 && r.bottom > 36) theme = el.dataset.theme ?? 'light';
       }
       setLight(theme === 'light');
+      // the dock arrives once the visitor has started to move, and steps aside for the closing's own actions
+      const end = document.querySelector('[data-dock-off]')?.getBoundingClientRect();
+      setDocked(window.scrollY > 40 && !(end && end.top < window.innerHeight * 0.6));
     };
     const queue = () => (raf ||= requestAnimationFrame(check));
     check();
@@ -72,7 +86,7 @@ export function Header({ dict, lang }: Props) {
             hrefLang={l}
             lang={l}
             aria-current={l === lang ? 'true' : undefined}
-            className={`inline-flex min-h-11 min-w-10 items-center justify-center transition-opacity duration-200 hover:opacity-100 ${l === lang ? 'opacity-100' : 'opacity-50'}`}
+            className={`inline-flex min-h-11 min-w-10 items-center justify-center transition-opacity duration-200 hover:opacity-100 ${l === lang ? 'opacity-100' : 'opacity-60'}`}
           >
             {l === 'ca' ? 'Cat' : 'Es'}
           </Link>
@@ -88,10 +102,16 @@ export function Header({ dict, lang }: Props) {
       </a>
       <header className={`fixed inset-x-0 top-0 z-50 transition-colors duration-500 ${tone}`}>
         <div className="wrap flex h-[var(--header-h)] items-center justify-between gap-6">
-          <Link href={`/${lang}`} className="font-display text-[1.375rem] leading-none tracking-[0.01em]">
-            ModularDom
+          <Link href={`/${lang}`} aria-label="ModularDom" className="inline-flex min-h-11 items-center">
+            <Logo />
           </Link>
-          <div className="flex items-center gap-3 md:gap-7">
+          <div className="flex items-center gap-2 md:gap-6">
+            <Link href={`/${lang}/contacte`} className="link hidden text-[0.9375rem] md:inline-flex">
+              {dict.ui.contactShort}
+            </Link>
+            <Link href={`/${lang}/configurador`} className={`btn btn-sm hidden md:inline-flex ${open || !light ? 'btn-line' : 'btn-line-ink'}`}>
+              {dict.ui.configureShort}
+            </Link>
             <div className="hidden sm:block">{languages}</div>
             <button
               ref={toggle}
@@ -118,49 +138,65 @@ export function Header({ dict, lang }: Props) {
 
       <div
         id="menu"
-        ref={menu}
         role="dialog"
         aria-modal="true"
         aria-label={dict.ui.menu}
         inert={!open}
-        className="glass fixed inset-0 z-40 overflow-y-auto bg-ink/[0.93] text-paper backdrop-blur-xl"
+        className="glass fixed inset-0 z-40 overflow-y-auto bg-ink/[0.94] text-paper backdrop-blur-2xl"
         style={{
           clipPath: open ? 'inset(0)' : 'inset(0 0 100% 0)',
           visibility: open ? 'visible' : 'hidden',
-          // opens unhurried, closes faster: the system answering, not performing
-          transition: open
-            ? 'clip-path 500ms var(--ease-in-out), visibility 0s'
-            : 'clip-path 350ms var(--ease-in-out), visibility 0s 350ms',
+          transition: open ? 'clip-path 500ms var(--ease-drawer), visibility 0s' : 'clip-path 320ms var(--ease-in-out), visibility 0s 320ms',
         }}
       >
-        <div className="wrap grid min-h-full content-end gap-10 pb-10 pt-28 md:grid-cols-12 md:gap-x-10 md:pb-16">
+        <div className="wrap grid min-h-full content-end gap-10 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-28 md:grid-cols-12 md:gap-x-10 md:pb-16">
           <nav aria-label={dict.ui.menu} className="md:col-span-8">
-            <ul className="md:columns-2 md:gap-x-10">
+            <ul className="md:columns-2 md:gap-x-12">
               {NAV.map((n, i) => (
                 <li key={n.key} className="break-inside-avoid overflow-hidden border-b border-paper/15">
                   <Link
                     href={`/${lang}/${n.slug}`}
                     aria-current={rest === `/${n.slug}` ? 'page' : undefined}
-                    className="group flex min-h-[3.75rem] items-center justify-between gap-6 font-display text-[clamp(1.5rem,1.1rem+1.5vw,2.25rem)] leading-tight"
+                    className="group flex min-h-[3.9rem] items-center gap-5 t-serif text-[clamp(1.6rem,1.15rem+1.7vw,2.5rem)] leading-tight"
                     style={{
-                      transform: open ? 'none' : 'translateY(105%)',
-                      transition: `transform ${open ? 700 : 0}ms var(--ease-out) ${open ? 120 + i * 40 : 350}ms`,
+                      // each row rises out of its own rule, later the lower it is; on closing they simply go
+                      transform: open ? 'none' : 'translateY(110%)',
+                      opacity: open ? 1 : 0,
+                      transition: open ? `transform 720ms var(--ease-out) ${140 + i * 42}ms, opacity 400ms ease ${140 + i * 42}ms` : 'transform 0s 320ms, opacity 200ms ease',
                     }}
                   >
-                    <span className="transition-transform duration-500 ease-[var(--ease-out)] group-hover:translate-x-3">{dict.nav[n.key]}</span>
-                    <span className="block h-px w-8 origin-right scale-x-0 bg-current transition-transform duration-500 ease-[var(--ease-out)] group-hover:scale-x-100" aria-hidden="true" />
+                    <span className="t-note t-num w-6 font-sans text-paper/70">{String(i + 1).padStart(2, '0')}</span>
+                    <span className="transition-transform duration-500 ease-[var(--ease-out)] group-hover:translate-x-2 group-hover:italic">{dict.nav[n.key]}</span>
                   </Link>
                 </li>
               ))}
             </ul>
           </nav>
-          <div className="flex items-end justify-between gap-6 md:col-span-3 md:col-start-10 md:flex-col md:items-start md:justify-end">
-            <Link href={`/${lang}/configurador`} className="btn btn-paper">
-              {dict.ui.configure}
-            </Link>
+          <div className="flex flex-wrap items-end justify-between gap-6 md:col-span-3 md:col-start-10 md:flex-col md:items-start md:justify-end">
+            <div className="flex flex-col items-start gap-1">
+              <Link href={`/${lang}/configurador`} className="btn btn-paper">
+                {dict.ui.configure}
+              </Link>
+              <Link href={`/${lang}/contacte`} className="link text-[0.9375rem]">
+                {dict.ui.contact}
+              </Link>
+            </div>
             <div className="sm:hidden">{languages}</div>
           </div>
         </div>
+      </div>
+
+      {/* phone: the two actions sit at the thumb, on glass, above the home indicator */}
+      <div
+        className={`glass fixed inset-x-0 bottom-0 z-30 grid grid-cols-[1.4fr_1fr] gap-2 border-t border-paper/10 bg-ink/80 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 text-paper backdrop-blur-xl transition-transform duration-500 ease-[var(--ease-drawer)] md:hidden ${docked && !open ? '' : 'translate-y-full'}`}
+        inert={!docked || open}
+      >
+        <Link href={`/${lang}/configurador`} className="btn btn-sm btn-paper">
+          {dict.ui.configure}
+        </Link>
+        <Link href={`/${lang}/contacte`} className="btn btn-sm btn-line">
+          {dict.ui.contactShort}
+        </Link>
       </div>
     </>
   );

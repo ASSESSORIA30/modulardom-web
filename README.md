@@ -1,4 +1,4 @@
-# ModularDom — web corporativa (V2 cinematogràfica)
+# ModularDom — web corporativa (V3)
 
 Next.js (App Router) · TypeScript · Tailwind CSS 4 · GSAP ScrollTrigger · Lenis.
 
@@ -8,23 +8,36 @@ npm run dev        # http://localhost:3000  →  /ca, /es
 npm run build
 ```
 
-## Estructura de la portada
+## Estructura de## Estructura de la portada
 
-1. **Recorregut** (exterior → entrada → interior → cuina): una sola seqüència de 550 fotogrames lligada al scroll.
-2. **Projectes**: el fotograma final es contrau en una làmina i dona pas a la galeria arrossegable.
-3. **Sistemes constructius** · 4. **Qualitats i acabats** · 5. **Configurador** · 6. **Procés** · 7. **MINERAL** · 8. **Tancament**.
+1. **Recorregut** (exterior → entrada → interior → cuina): una seqüència de 550 fotogrames lligada al scroll.
+2. **Projectes**: galeria de desplaçament horitzontal. Mostra les obres de `src/content/projects.ts`; mentre és buit, la casa conceptual, etiquetada com a visualització.
+3. **Sistemes constructius**: casa 3D (three.js) que es descompon en set capes amb el scroll.
+4. **Qualitats i acabats**: catàleg de mostres conceptuals per famílies.
+5. **Configurador**: set decisions amb el model 3D responent. Sense preus ni fórmules.
+6. **Procés**: sis passos amb un alçat que es dibuixa.
+7. **MINERAL**: línia de bungalows, registre B2B, sol·licitud de pressupost per unitats.
+8. **Tancament**.
 
 | Què | On |
 |---|---|
 | Textos CAT / ES | `src/content/i18n.ts` |
-| Estacions del recorregut (quin text surt a quins fotogrames) | `src/content/tour.ts` |
-| Motor: càrrega, memòria, inèrcia de càmera, dibuix | `src/components/tour/engine.ts` |
-| Scroll, text, indicador, pas a làmina | `src/components/tour/Tour.tsx` |
-| Seccions editorials | `src/components/sections/` |
-| Vídeos originals 4K (intactes, a l'arrel) i configuració del muntatge | `*.mp4`, `media/tour.json` |
-| Fotogrames i retalls generats | `public/tour/{md,sm,hd}/`, `public/stills/` |
+| Interruptors pendents del client (preu, logotip, WhatsApp, CRM, imatge final) | `src/content/site.ts` |
+| Obres reals | `src/content/projects.ts` |
+| Estacions del recorregut | `src/content/tour.ts` |
+| Motor del recorregut (càmera, càrrega, descodificació, mides) | `src/components/tour/engine.ts` |
+| Escena 3D (geometria, capes, configuració) | `src/components/house3d/scene.ts` |
+| Seccions | `src/components/sections/` |
+| Sortida de formularis (CRM desactivat) | `src/lib/crm.ts` |
+| Vídeos originals 4K (intactes, a l'arrel) i muntatge | `*.mp4`, `media/tour.json` |
 
-## El muntatge
+### Coses a activar quan hi hagi dades
+
+- **Reclam de preu** («des de 993 €/m²»): `PRICE_CLAIM.enabled` a `site.ts`. Ja està maquetat a la portada.
+- **Logotip**: copia el fitxer a `public/brand/` i posa'n la ruta a `LOGO.src`.
+- **WhatsApp**: `WHATSAPP` amb el número verificat.
+- **CRM**: `CRM.endpoint` + `CRM.enabled`; tots els formularis passen per `submitLead()`.
+- **Imatge nocturna**: `public/stills/closing.webp` i `CLOSING` a `site.ts`.
 
 `media/tour.json` defineix quins fotogrames de cada clip s'utilitzen. El clip 1 acaba amb 4 fotogrames
 que salten enrere a una imatge fixa, i el clip 2 comença amb aquesta mateixa imatge: s'exclouen
@@ -43,11 +56,6 @@ npm run tour -- --map    # només el mapa de moviment
 - Si es regeneren fotogrames, incrementa `TOUR_VERSION` a `src/content/tour.ts` (memòria cau d'un any).
 
 Per allargar el recorregut: afegeix el clip a `clips`, torna a generar i afegeix una estació a `STATIONS`.
-
-## Imatge de tancament
-
-`03-mansio-nocturna.png` no era al repositori. Mentrestant s'utilitza un fotograma de l'exterior
-enfosquit. Per posar la definitiva: desa-la com `public/stills/closing.webp` i canvia `src/content/site.ts`.
 
 ## Desplegament
 

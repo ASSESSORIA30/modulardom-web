@@ -1,192 +1,206 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Still } from '@/components/ui/Still';
-import type { Dictionary, Locale, SpaceId } from '@/content/i18n';
+import type { Dictionary, Locale } from '@/content/i18n';
+import { CONCEPT_SPACES, PROJECTS } from '@/content/projects';
 
 /*
-  The rooms of the concept house, as a strip you pull sideways.
-  Mouse: drag with momentum (the release is projected like a scroll, never cut). Touch, trackpad
-  and keyboard use the browser's own horizontal scrolling. Pictures shift a little inside their
-  frames as they cross the screen, which gives the strip depth.
+  The gallery. On a desktop the page holds still and the scroll carries the strip sideways, with
+  the weight of the tour's camera; each picture opens as it comes in from the right and drifts
+  inside its frame as it crosses, so the strip has depth. On touch it is the platform's own
+  sideways scroll, with the same drift.
+
+  It shows ModularDom's built work when src/content/projects.ts has any. Until then it shows the
+  concept house of the tour, and says so on every sheet.
 */
 
-const SPACES: { id: SpaceId; still: string; shape: string }[] = [
-  { id: 'facana', still: 'space-facana', shape: 'aspect-[16/9] h-[44svh] md:h-[64svh]' },
-  { id: 'acces', still: 'space-acces', shape: 'aspect-[2/3] h-[38svh] md:h-[52svh] mb-[9svh]' },
-  { id: 'llindar', still: 'space-llindar', shape: 'aspect-[6/5] h-[34svh] md:h-[46svh]' },
-  { id: 'sala', still: 'space-sala', shape: 'aspect-[16/9] h-[44svh] md:h-[64svh] mb-[5svh]' },
-  { id: 'escala', still: 'space-escala', shape: 'aspect-[5/6] h-[40svh] md:h-[56svh]' },
-  { id: 'cuina', still: 'space-cuina', shape: 'aspect-[16/9] h-[40svh] md:h-[58svh] mb-[8svh]' },
-];
+type Item = { key: string; title: string; ratio: number; still?: string; src?: string; facts: [string, string][]; concept: boolean };
+
+function itemsFor(dict: Dictionary, lang: Locale): Item[] {
+  if (PROJECTS.length) {
+    const f = dict.projects.fields;
+    return PROJECTS.map((p) => ({
+      key: p.id,
+      title: p.name,
+      ratio: 16 / 10,
+      src: p.images[0],
+      concept: false,
+      facts: [
+        p.location && [f.location, p.location],
+        p.surface && [f.surface, `${p.surface} m²`],
+        p.year && [f.year, String(p.year)],
+        p.system && [f.system, dict.systems.items[p.system].name],
+        ...(p.features?.[lang] ?? []).map((x) => ['', x]),
+      ].filter(Boolean) as [string, string][],
+    }));
+  }
+  return CONCEPT_SPACES.map((s) => ({ key: s.id, title: dict.projects.spaces[s.id], ratio: s.ratio, still: s.still, facts: [], concept: true }));
+}
 
 export function Gallery({ dict, lang }: { dict: Dictionary; lang: Locale }) {
-  const scroller = useRef<HTMLDivElement>(null);
-  const cursor = useRef<HTMLDivElement>(null);
+  const track = useRef<HTMLDivElement>(null);
+  const view = useRef<HTMLDivElement>(null);
+  const strip = useRef<HTMLUListElement>(null);
+  const bar = useRef<HTMLSpanElement>(null);
+  const count = useRef<HTMLSpanElement>(null);
+  const [pinned, setPinned] = useState(false);
+  const items = itemsFor(dict, lang);
 
   useEffect(() => {
-    const el = scroller.current!;
-    const cur = cursor.current!;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const imgs = [...el.querySelectorAll<HTMLImageElement>('.gallery-frame > img')];
-    let raf = 0;
-
-    const parallax = () => {
-      raf = 0;
-      if (reduced) return;
-      const vw = window.innerWidth;
-      for (const img of imgs) {
-        const r = img.parentElement!.getBoundingClientRect();
-        if (r.right < -200 || r.left > vw + 200) continue;
-        const k = (r.left + r.width / 2 - vw / 2) / vw; // −0.5 … 0.5 across the screen
-        img.style.transform = `translate3d(${(-k * 9).toFixed(2)}%, 0, 0)`;
-      }
-    };
-    const queue = () => (raf ||= requestAnimationFrame(parallax));
-    el.addEventListener('scroll', queue, { passive: true });
-    window.addEventListener('resize', queue);
-    parallax();
-
-    // —— mouse drag with momentum ——
-    let dragging = false;
-    let moved = 0;
-    let startX = 0;
-    let startLeft = 0;
-    let glide = 0;
-    const history: { x: number; t: number }[] = [];
-    const down = (e: PointerEvent) => {
-      if (e.pointerType !== 'mouse' || e.button !== 0) return;
-      cancelAnimationFrame(glide);
-      dragging = true;
-      moved = 0;
-      startX = e.clientX;
-      startLeft = el.scrollLeft;
-      history.length = 0;
-      history.push({ x: e.clientX, t: e.timeStamp });
-    };
-    const move = (e: PointerEvent) => {
-      // the label follows the pointer with a little weight
-      tx = e.clientX;
-      ty = e.clientY;
-      if (!dragging) return;
-      const dx = e.clientX - startX;
-      moved = Math.max(moved, Math.abs(dx));
-      if (moved > 6 && !el.hasAttribute('data-dragging')) {
-        el.setAttribute('data-dragging', '');
-        el.setPointerCapture(e.pointerId);
-      }
-      el.scrollLeft = startLeft - dx;
-      history.push({ x: e.clientX, t: e.timeStamp });
-      if (history.length > 6) history.shift();
-    };
-    const up = (e: PointerEvent) => {
-      if (!dragging) return;
-      dragging = false;
-      el.removeAttribute('data-dragging');
-      const a = history[0];
-      const b = history[history.length - 1];
-      const v = b && a && b.t > a.t ? ((b.x - a.x) / (b.t - a.t)) * 1000 : 0; // px/s
-      if (e.timeStamp - (b?.t ?? 0) > 80 || Math.abs(v) < 60 || reduced) return;
-      // where a scroll with this velocity would come to rest (Apple's deceleration, 0.998)
-      const rate = 0.998;
-      let from = el.scrollLeft;
-      const to = from - ((v / 1000) * rate) / (1 - rate);
-      let prev = performance.now();
-      const step = (now: number) => {
-        const dt = Math.min(now - prev, 50);
-        prev = now;
-        from += (to - from) * (1 - Math.exp(-dt / 325));
-        el.scrollLeft = from;
-        if (Math.abs(to - from) > 0.5) glide = requestAnimationFrame(step);
-      };
-      glide = requestAnimationFrame(step);
-    };
-    // a drag must not open the link it started on
-    const click = (e: MouseEvent) => {
-      if (moved > 6) e.preventDefault();
-    };
-
-    // —— the "drag" label ——
-    let tx = 0;
-    let ty = 0;
-    let x = 0;
-    let y = 0;
-    let follow = 0;
-    let inside = false;
-    const loop = () => {
-      x += (tx - x) * 0.2;
-      y += (ty - y) * 0.2;
-      cur.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -50%) scale(${inside ? 1 : 0.6})`;
-      follow = inside || Math.abs(tx - x) > 0.5 ? requestAnimationFrame(loop) : 0;
-    };
-    const enter = (e: PointerEvent) => {
-      if (e.pointerType !== 'mouse') return;
-      inside = true;
-      x = tx = e.clientX;
-      y = ty = e.clientY;
-      cur.style.opacity = '1';
-      follow ||= requestAnimationFrame(loop);
-    };
-    const leave = () => {
-      inside = false;
-      cur.style.opacity = '0';
-    };
-
-    el.addEventListener('pointerdown', down);
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', up);
-    el.addEventListener('click', click, true);
-    el.addEventListener('pointerenter', enter);
-    el.addEventListener('pointerleave', leave);
-    return () => {
-      cancelAnimationFrame(raf);
-      cancelAnimationFrame(glide);
-      cancelAnimationFrame(follow);
-      el.removeEventListener('scroll', queue);
-      window.removeEventListener('resize', queue);
-      el.removeEventListener('pointerdown', down);
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', up);
-      el.removeEventListener('pointercancel', up);
-      el.removeEventListener('click', click, true);
-      el.removeEventListener('pointerenter', enter);
-      el.removeEventListener('pointerleave', leave);
-    };
+    const mq = window.matchMedia('(min-width: 56rem) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)');
+    const set = () => setPinned(mq.matches);
+    set();
+    mq.addEventListener('change', set);
+    return () => mq.removeEventListener('change', set);
   }, []);
 
+  useEffect(() => {
+    const el = { track: track.current!, view: view.current!, strip: strip.current! };
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const frames = [...el.strip.querySelectorAll<HTMLElement>('.gallery-frame')];
+    let raf = 0;
+    let x = 0;
+    let target = 0;
+    let travel = 0;
+    let last = performance.now();
+    let seen = false;
+
+    const layout = () => {
+      travel = Math.max(0, el.strip.scrollWidth - window.innerWidth);
+      const h = pinned ? `${window.innerHeight + travel}px` : '';
+      if (el.track.style.height !== h) {
+        el.track.style.height = h;
+        // the page just changed length: everything measured below this point has moved
+        ScrollTrigger.refresh();
+      }
+      read();
+    };
+    const read = () => {
+      if (pinned) {
+        const r = el.track.getBoundingClientRect();
+        target = Math.min(1, Math.max(0, -r.top / Math.max(1, r.height - window.innerHeight))) * travel;
+      } else target = el.view.scrollLeft;
+      queue();
+    };
+    const paint = (now: number) => {
+      raf = 0;
+      const dt = Math.min(now - last, 50) / 1000;
+      last = now;
+      // the strip follows the scroll with a little mass, like the camera of the tour
+      x = pinned ? x + (target - x) * (1 - Math.exp(-dt * 10)) : target;
+      if (Math.abs(target - x) < 0.3) x = target;
+      if (pinned) el.strip.style.transform = `translate3d(${-x.toFixed(1)}px, 0, 0)`;
+      const vw = window.innerWidth;
+      let nearest = 0;
+      let best = Infinity;
+      frames.forEach((f, i) => {
+        const r = f.getBoundingClientRect();
+        const c = r.left + r.width / 2;
+        if (Math.abs(c - vw / 2) < best) {
+          best = Math.abs(c - vw / 2);
+          nearest = i;
+        }
+        if (r.right < -300 || r.left > vw + 300 || reduced) return;
+        const img = f.firstElementChild as HTMLElement;
+        const k = (c - vw / 2) / vw; // −0.5 … 0.5 across the screen
+        // arriving from the right: the frame opens, the picture settles from slightly too close
+        const enter = pinned ? Math.min(1, Math.max(0, (vw - r.left) / (vw * 0.5))) : 1;
+        const e = 1 - Math.pow(1 - enter, 3);
+        f.style.clipPath = e >= 1 ? '' : `inset(0 0 0 ${((1 - e) * 22).toFixed(2)}%)`;
+        img.style.transform = `translate3d(${(-k * 11).toFixed(2)}%, 0, 0) scale(${(1.14 - e * 0.14).toFixed(4)})`;
+      });
+      if (bar.current) bar.current.style.transform = `scaleX(${(travel ? x / travel : 0).toFixed(4)})`;
+      if (count.current) count.current.textContent = String(nearest + 1).padStart(2, '0');
+      if (x !== target) queue();
+    };
+    const queue = () => {
+      if (!raf && seen) {
+        last = performance.now();
+        raf = requestAnimationFrame(paint);
+      }
+    };
+    const io = new IntersectionObserver(([e]) => {
+      seen = e.isIntersecting;
+      if (seen) queue();
+    });
+    io.observe(el.track);
+    const ro = new ResizeObserver(layout);
+    ro.observe(el.strip);
+    window.addEventListener('scroll', read, { passive: true });
+    window.addEventListener('resize', layout);
+    el.view.addEventListener('scroll', read, { passive: true });
+    layout();
+    return () => {
+      cancelAnimationFrame(raf);
+      io.disconnect();
+      ro.disconnect();
+      window.removeEventListener('scroll', read);
+      window.removeEventListener('resize', layout);
+      el.view.removeEventListener('scroll', read);
+      el.strip.style.transform = '';
+      el.track.style.height = '';
+    };
+  }, [pinned]);
+
   return (
-    <section className="relative bg-paper pb-24 pt-10 text-ink md:pb-36 md:pt-16" data-theme="light" aria-labelledby="projectes">
-      <div ref={scroller} className="gallery" tabIndex={0} role="group" aria-label={dict.projects.name}>
-        <ul className="flex w-max items-end gap-5 px-[var(--edge)] md:gap-10">
-          {SPACES.map((s, i) => (
-            <li key={s.id} className={`shrink-0 ${s.shape.split(' ').filter((c) => c.startsWith('mb-')).join(' ')}`}>
-              <figure>
-                <div className={`gallery-frame ${s.shape.replace(/mb-\[[^\]]+\]/g, '')}`}>
-                  <Still name={s.still} alt="" />
+    <section className="bg-paper text-ink" data-theme="light" aria-labelledby="projectes">
+      <div ref={track}>
+        <div className={pinned ? 'sticky top-0 flex h-[100lvh] flex-col justify-center overflow-hidden' : 'py-10'}>
+          <div ref={view} className={pinned ? '' : 'gallery-scroller'} tabIndex={pinned ? undefined : 0} role="group" aria-label={dict.projects.name}>
+            <ul ref={strip} className="flex w-max items-end gap-4 px-[var(--edge)] will-change-transform md:gap-[4.5vw] md:pr-[18vw]">
+              {items.map((it, i) => (
+                <li key={it.key} className="shrink-0 snap-start" style={{ marginBottom: pinned ? `${[0, 7, 2, 5, 0, 6][i % 6]}svh` : undefined }}>
+                  <figure>
+                    <div className="gallery-frame h-[52svh] md:h-[66svh]" style={{ aspectRatio: String(it.ratio) }}>
+                      {it.still ? (
+                        <Still name={it.still} alt="" />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={it.src} alt="" loading="lazy" decoding="async" draggable={false} />
+                      )}
+                    </div>
+                    <figcaption className="mt-4 grid grid-cols-[auto_1fr] items-baseline gap-x-5 gap-y-1">
+                      <span className="t-note t-num text-ink/70">{String(i + 1).padStart(2, '0')}</span>
+                      <span className="t-serif text-[1.5rem] leading-tight md:text-[1.75rem]">{it.title}</span>
+                      {it.concept && <span className="tag col-start-2 text-oak">{dict.ui.concept}</span>}
+                      {it.facts.length > 0 && (
+                        <dl className="col-start-2 mt-1 flex flex-wrap gap-x-6 gap-y-1 text-[0.9375rem]">
+                          {it.facts.map(([k, v]) => (
+                            <div key={k + v} className="flex gap-2">
+                              {k && <dt className="text-ink/70">{k}</dt>}
+                              <dd>{v}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </figcaption>
+                  </figure>
+                </li>
+              ))}
+              <li className="flex h-[52svh] shrink-0 snap-start items-center pl-2 pr-[6vw] md:h-[66svh]">
+                <div className="max-w-[18rem]">
+                  <p className="t-serif text-[1.75rem] leading-tight">{dict.projects.title.join(' ').replace(/\*/g, '')}</p>
+                  <Link href={`/${lang}/projectes`} className="btn btn-line-ink mt-6" draggable={false}>
+                    {dict.ui.projects}
+                  </Link>
                 </div>
-                <figcaption className="mt-3 flex items-baseline justify-between gap-6 text-[0.9375rem]">
-                  <span>{dict.projects.spaces[s.id]}</span>
-                  <span className="t-note t-num text-ink/70">
-                    {String(i + 1).padStart(2, '0')} / {String(SPACES.length).padStart(2, '0')}
-                  </span>
-                </figcaption>
-              </figure>
-            </li>
-          ))}
-          <li className="flex h-[44svh] shrink-0 items-center pl-4 pr-[8vw] md:h-[64svh]">
-            <Link href={`/${lang}/projectes`} className="btn btn-line-ink" draggable={false}>
-              {dict.ui.projects}
-            </Link>
-          </li>
-        </ul>
-      </div>
-      <div
-        ref={cursor}
-        aria-hidden="true"
-        className="t-note pointer-events-none fixed left-0 top-0 z-30 flex h-20 w-20 items-center justify-center rounded-full bg-ink text-paper opacity-0 transition-opacity duration-300"
-      >
-        {dict.ui.drag}
+              </li>
+            </ul>
+          </div>
+
+          <div className="wrap mt-6 flex items-center gap-6 md:mt-[3svh]">
+            <p className="t-note t-num shrink-0 text-ink/70" aria-hidden="true">
+              <span ref={count}>01</span> / {String(items.length).padStart(2, '0')}
+            </p>
+            <span className="relative block h-px flex-1 bg-ink/15" aria-hidden="true">
+              <span ref={bar} className="absolute inset-0 origin-left scale-x-0 bg-ink" />
+            </span>
+            {PROJECTS.length === 0 && <p className="t-note max-w-[26rem] text-ink/70 max-md:hidden">{dict.projects.conceptNote}</p>}
+          </div>
+          {PROJECTS.length === 0 && <p className="wrap t-note mt-3 text-ink/70 md:hidden">{dict.projects.conceptNote}</p>}
+        </div>
       </div>
     </section>
   );

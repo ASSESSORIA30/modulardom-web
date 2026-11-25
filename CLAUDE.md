@@ -20,10 +20,11 @@ Corporate website for ModularDom (Next.js). Project-level skills live in `.claud
 
 ## Project map
 
-- Home = scroll-driven tour + editorial sections. Tour: `src/components/tour/` (`engine.ts` loading/memory/camera, `Tour.tsx` scroll, copy, plate hand-over); stations in `src/content/tour.ts`. Sections: `src/components/sections/`. Copy CAT/ES: `src/content/i18n.ts`.
+- Home = scroll-driven tour + editorial sections. Tour: `src/components/tour/` (`engine.ts` camera/loading/decoding, `Tour.tsx` scroll, copy, plate hand-over). 3D house: `src/components/house3d/scene.ts` (plain three.js, lazy chunk; used by Systems and Configurator). Sections: `src/components/sections/`. Copy CAT/ES: `src/content/i18n.ts`. Client-pending switches: `src/content/site.ts`.
 - `public/tour/` (1,650 generated AVIF), `public/stills/` and the root `*.mp4` sources are binary: never list or read them. Rebuild with `npm run tour` (see README); `src/content/tour.json` and `stills.json` are generated too.
-- Verify with `npm run build` and a Playwright run against `next start`; no test suite yet.
-- `main` holds V1 as backup; V2 lives on `redesign/cinematic-v2` until approved.
+- Verify with `npm run build` and a Playwright run against `next start` (WebGL needs `--use-angle=swiftshader --enable-unsafe-swiftshader`); no test suite yet.
+- Branches: `main` = V1, `redesign/cinematic-v2` = V2, `redesign/cinematic-v3` = V3 (awaiting client approval; do not merge).
+- No invented data: no prices, formulas, projects, models, certifications or deadlines. Concept images are labelled as such.
 
 ## Conventions
 

@@ -1,148 +1,191 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { HouseCanvas } from '@/components/house3d/HouseCanvas';
+import type { HouseScene } from '@/components/house3d/scene';
+import { Lines } from '@/components/ui/Lines';
 import { Reveal } from '@/components/ui/Reveal';
-import { Words } from '@/components/ui/Words';
-import type { Dictionary, SystemId } from '@/content/i18n';
+import type { Dictionary, LayerId, SystemId } from '@/content/i18n';
+import { scrollToY } from '@/lib/scroll';
+import { useReducedMotion } from '@/lib/useReducedMotion';
+
+gsap.registerPlugin(ScrollTrigger);
 
 /*
-  Two ways to build a wall, drawn the way an architect would draw them: in section.
-  The drawings are schematic (no dimensions, no performance figures) and draw themselves when
-  their system is chosen.
+  The house taken apart. The section holds the screen while the scroll peels the layers off, from
+  the finishes inwards to the foundation; the list names the layer that has just come away.
+  Hovering or focusing a name isolates that layer; choosing a system swaps the structure.
 */
 
-const ORDER: SystemId[] = ['cellular', 'timber'];
-
-/** a wall of aerated-concrete blocks, laid in bond, rendered on both faces */
-function CellularDrawing() {
-  const rows = 7;
-  const lines: React.ReactNode[] = [];
-  for (let r = 0; r <= rows; r++) {
-    const y = 40 + r * 40;
-    lines.push(<line key={`h${r}`} x1="150" y1={y} x2="330" y2={y} pathLength={1} style={{ '--d': r } as React.CSSProperties} />);
-    if (r < rows) {
-      const xs = r % 2 ? [210, 270] : [240];
-      xs.forEach((x) => lines.push(<line key={`v${r}-${x}`} x1={x} y1={y} x2={x} y2={y + 40} pathLength={1} style={{ '--d': r + 2 } as React.CSSProperties} />));
-    }
-  }
-  return (
-    <>
-      <rect x="150" y="40" width="180" height="280" pathLength={1} />
-      {lines}
-      <line className="thin" x1="138" y1="40" x2="138" y2="320" pathLength={1} style={{ '--d': 6 } as React.CSSProperties} />
-      <line className="thin" x1="342" y1="40" x2="342" y2="320" pathLength={1} style={{ '--d': 6 } as React.CSSProperties} />
-      <path d="M60 320 H420" pathLength={1} style={{ '--d': 8 } as React.CSSProperties} />
-      <path className="thin" d="M60 336 H420 M100 320 V356 M380 320 V356" pathLength={1} style={{ '--d': 10 } as React.CSSProperties} />
-    </>
-  );
-}
-
-/** a light timber frame: plates, studs, insulation between them, boards on both faces */
-function TimberDrawing() {
-  const studs = [150, 210, 270, 330];
-  return (
-    <>
-      <rect x="140" y="40" width="200" height="14" pathLength={1} />
-      <rect x="140" y="306" width="200" height="14" pathLength={1} />
-      {studs.map((x, i) => (
-        <rect key={x} x={x - 7} y="54" width="14" height="252" pathLength={1} style={{ '--d': i + 1 } as React.CSSProperties} />
-      ))}
-      {studs.slice(0, -1).map((x, i) => (
-        <polyline
-          key={`i${x}`}
-          className="thin"
-          points={Array.from({ length: 15 }, (_, k) => `${x + 12 + (k % 2) * 36},${62 + k * 17}`).join(' ')}
-          pathLength={1}
-          style={{ '--d': i + 5 } as React.CSSProperties}
-        />
-      ))}
-      <line className="thin" x1="128" y1="40" x2="128" y2="320" pathLength={1} style={{ '--d': 8 } as React.CSSProperties} />
-      <line className="thin" x1="352" y1="40" x2="352" y2="320" pathLength={1} style={{ '--d': 8 } as React.CSSProperties} />
-      <path d="M60 320 H420" pathLength={1} style={{ '--d': 9 } as React.CSSProperties} />
-      <path className="thin" d="M60 336 H420 M100 320 V356 M380 320 V356" pathLength={1} style={{ '--d': 11 } as React.CSSProperties} />
-    </>
-  );
-}
+// in the order they leave the house, with the scroll position where each one is the subject
+const ORDER: { id: LayerId; at: number }[] = [
+  { id: 'finishes', at: 0.17 },
+  { id: 'roof', at: 0.29 },
+  { id: 'insulation', at: 0.43 },
+  { id: 'envelope', at: 0.56 },
+  { id: 'services', at: 0.68 },
+  { id: 'structure', at: 0.8 },
+  { id: 'foundation', at: 0.94 },
+];
+const layerAt = (t: number): LayerId | null => {
+  if (t < 0.06) return null;
+  let cur = ORDER[0].id;
+  for (let i = 1; i < ORDER.length; i++) if (t >= (ORDER[i - 1].at + ORDER[i].at) / 2) cur = ORDER[i].id;
+  return cur;
+};
+const SYSTEMS: SystemId[] = ['cellular', 'timber'];
 
 export function Systems({ dict }: { dict: Dictionary }) {
-  const [active, setActive] = useState<SystemId>('cellular');
-  const [seen, setSeen] = useState(false);
-  const figure = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+  const track = useRef<HTMLDivElement>(null);
+  const scene = useRef<HouseScene | null>(null);
+  const hover = useRef<LayerId | null>(null);
+  const bar = useRef<HTMLSpanElement>(null);
+  const [system, setSystem] = useState<SystemId>('cellular');
+  const [active, setActive] = useState<LayerId | null>(null);
+  const [started, setStarted] = useState(false);
+  const s = dict.systems;
+
+  const onReady = useCallback(
+    (sc: HouseScene) => {
+      scene.current = sc;
+      if (reduced) {
+        // no scroll-driven motion: show the house already open
+        sc.setProgress(0.62);
+        setStarted(true);
+        return;
+      }
+      let cur: LayerId | null = null;
+      const st = ScrollTrigger.create({
+        trigger: track.current,
+        start: 'top top',
+        end: 'bottom bottom',
+        onUpdate: (self) => {
+          const t = self.progress;
+          sc.setProgress(t);
+          if (bar.current) bar.current.style.transform = `scaleX(${t.toFixed(4)})`;
+          const next = layerAt(t);
+          if (next !== cur) {
+            cur = next;
+            setActive(next);
+            setStarted(t > 0.03);
+            if (!hover.current) sc.setFocus(next);
+          }
+        },
+      });
+      return () => st.kill();
+    },
+    [reduced],
+  );
 
   useEffect(() => {
-    const io = new IntersectionObserver(([e]) => e.isIntersecting && (setSeen(true), io.disconnect()), { threshold: 0.35 });
-    io.observe(figure.current!);
-    return () => io.disconnect();
-  }, []);
+    scene.current?.setConfig({ system });
+  }, [system]);
+
+  const focus = (id: LayerId | null) => {
+    hover.current = id;
+    scene.current?.setFocus(id ?? active);
+  };
+  const jump = (at: number, id: LayerId) => {
+    if (reduced) {
+      setActive(id);
+      scene.current?.setFocus(id);
+      return;
+    }
+    const el = track.current!;
+    const top = el.getBoundingClientRect().top + window.scrollY;
+    scrollToY(top + at * (el.offsetHeight - window.innerHeight), 1.2);
+  };
 
   return (
     <section className="bg-ink text-paper" data-theme="dark" aria-labelledby="sistemes">
-      <div className="wrap grid gap-y-12 py-24 md:grid-cols-12 md:gap-x-10 md:py-40">
-        <Reveal as="header" className="md:col-span-5">
-          <p className="t-note mb-5 text-water-light" data-fade>
-            {dict.systems.name}
-          </p>
-          <h2 id="sistemes" className="t-title">
-            <Words text={dict.systems.title} />
-          </h2>
-          <p className="t-lead mt-5 max-w-[40ch] text-paper/75" data-fade style={{ '--i': 1 } as React.CSSProperties}>
-            {dict.systems.text}
-          </p>
-        </Reveal>
-
-        <div ref={figure} className="relative md:col-span-6 md:col-start-7 md:row-span-2">
-          <div className="relative aspect-[6/5] border border-paper/15">
-            {ORDER.map((id) => (
-              <svg
-                key={id}
-                viewBox="0 0 480 400"
-                className="draw absolute inset-0 h-full w-full text-paper"
-                data-on={seen && active === id ? '' : undefined}
-                style={{ opacity: active === id ? 1 : 0, transition: 'opacity 300ms var(--ease-out)' }}
-                aria-hidden="true"
-              >
-                {id === 'cellular' ? <CellularDrawing /> : <TimberDrawing />}
-              </svg>
-            ))}
+      <div ref={track} className={reduced ? '' : 'h-[440lvh]'}>
+        <div className={`${reduced ? 'relative min-h-svh' : 'sticky top-0 h-[100lvh]'} overflow-hidden`}>
+          {/* the stage: the house sits right of centre and bleeds off the edge */}
+          <div className="absolute inset-x-0 top-[9svh] h-[46svh] md:inset-y-0 md:left-[34%] md:right-[-4%] md:top-0 md:h-auto">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_55%_at_50%_58%,rgb(244_240_232/0.09),transparent_70%)]" aria-hidden="true" />
+            <HouseCanvas mode="layers" className="h-full w-full" label={s.name} fallback={s.fallback} onReady={onReady} />
           </div>
-        </div>
 
-        <div className="md:col-span-5 md:self-end">
-          {ORDER.map((id) => {
-            const item = dict.systems.items[id];
-            const on = active === id;
-            return (
-              <div key={id} className="border-t border-paper/20 last:border-b">
-                <button
-                  type="button"
-                  id={`tab-${id}`}
-                  aria-expanded={on}
-                  aria-controls={`panel-${id}`}
-                  onClick={() => setActive(id)}
-                  onPointerEnter={(e) => e.pointerType === 'mouse' && setActive(id)}
-                  onFocus={() => setActive(id)}
-                  className={`flex min-h-16 w-full items-center justify-between gap-6 py-4 text-left font-display text-[clamp(1.4rem,1.1rem+1.1vw,2rem)] leading-tight transition-opacity duration-300 ${on ? 'opacity-100' : 'opacity-60'}`}
-                >
-                  {item.name}
-                  <span className={`block h-px w-8 origin-right bg-current transition-transform duration-500 ease-out ${on ? 'scale-x-100' : 'scale-x-[0.35]'}`} aria-hidden="true" />
-                </button>
-                <div
-                  id={`panel-${id}`}
-                  role="region"
-                  aria-labelledby={`tab-${id}`}
-                  hidden={!on}
-                  className="pb-6"
-                  style={on ? { animation: 'swap 420ms var(--ease-out)' } : undefined}
-                >
-                  <p className="max-w-[42ch] text-paper/80">{item.text}</p>
-                  <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[0.9375rem] text-water-light">
-                    {item.points.map((p) => (
-                      <li key={p}>{p}</li>
-                    ))}
-                  </ul>
-                </div>
+          <div className="wrap relative flex h-[100svh] flex-col justify-end pb-6 pt-[calc(var(--header-h)+0.5rem)] md:justify-center md:pb-0">
+            <div className="md:w-[min(40%,30rem)]">
+              <Reveal as="header" className="max-md:hidden">
+                <p className="t-note mb-4 text-water-light" data-fade>
+                  {s.name}
+                </p>
+                <h2 id="sistemes" className="t-title">
+                  <Lines lines={s.title} />
+                </h2>
+                <p className="mt-4 max-w-[38ch] text-paper/75" data-fade style={{ '--i': 2 } as React.CSSProperties}>
+                  {s.text}
+                </p>
+              </Reveal>
+              <h2 className="t-title md:hidden" aria-hidden="true">
+                {s.title.join(' ').replace(/\*/g, '')}
+              </h2>
+
+              {/* the two systems: the structure of the model follows the choice */}
+              <div className="mt-5 flex border border-paper/25 text-[0.875rem] font-medium md:mt-8" role="radiogroup" aria-label={s.name}>
+                {SYSTEMS.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={system === id}
+                    onClick={() => setSystem(id)}
+                    className={`min-h-11 flex-1 px-3 transition-colors duration-300 active:scale-[0.98] ${system === id ? 'bg-paper text-ink' : 'text-paper/80 hover:text-paper'}`}
+                  >
+                    {s.items[id].name}
+                  </button>
+                ))}
               </div>
-            );
-          })}
+
+              <ol className="mt-4 md:mt-6" onPointerLeave={() => focus(null)}>
+                {ORDER.map(({ id, at }, i) => {
+                  const layer = s.layers[id];
+                  const on = active === id;
+                  const text = id === 'structure' ? layer[system] ?? layer.text : layer.text;
+                  return (
+                    <li key={id} className={`border-t border-paper/15 last:border-b ${on ? '' : 'max-md:hidden'}`}>
+                      <button
+                        type="button"
+                        aria-current={on ? 'step' : undefined}
+                        onClick={() => jump(at, id)}
+                        onPointerEnter={(e) => e.pointerType === 'mouse' && focus(id)}
+                        onFocus={() => focus(id)}
+                        onBlur={() => focus(null)}
+                        className="group grid w-full grid-cols-[2.25rem_1fr] items-baseline py-2 text-left md:py-[0.55rem]"
+                      >
+                        <span className={`t-note t-num transition-colors duration-300 ${on ? 'text-water-light' : 'text-paper/70'}`}>{String(i + 1).padStart(2, '0')}</span>
+                        <span>
+                          <span className={`block font-display text-[1.3rem] leading-tight transition-[opacity,transform] duration-500 ease-[var(--ease-out)] md:text-[1.4rem] ${on ? 'translate-x-2 opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
+                            {layer.name}
+                          </span>
+                          {/* the row opens with a grid track, not a height: nothing to measure */}
+                          <span className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[var(--ease-out)] ${on ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                            <span className="overflow-hidden">
+                              <span className="block max-w-[36ch] translate-x-2 pb-1 pt-1 text-[0.9375rem] text-paper/75">{text}</span>
+                            </span>
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              <div className="mt-4 flex items-center gap-4 md:mt-6">
+                <span className="relative block h-px flex-1 bg-paper/20" aria-hidden="true">
+                  <span ref={bar} className="absolute inset-0 origin-left scale-x-0 bg-water-light" />
+                </span>
+                <p className={`t-note text-paper/70 transition-opacity duration-500 ${started ? 'opacity-0' : 'opacity-100'}`} aria-hidden={started}>
+                  {s.hint}
+                </p>
+              </div>
+              <p className="t-note mt-3 max-w-[44ch] text-paper/70">{s.note}</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>

@@ -17,123 +17,182 @@ export type NavKey = (typeof NAV)[number]['key'];
 
 export type StationId = 'exterior' | 'entrada' | 'interior' | 'cuina';
 export type SpaceId = 'facana' | 'acces' | 'llindar' | 'sala' | 'escala' | 'cuina';
-export type MaterialId = 'traverti' | 'roure' | 'vidre' | 'pedra';
 export type SystemId = 'cellular' | 'timber';
+export type LayerId = 'foundation' | 'structure' | 'envelope' | 'insulation' | 'services' | 'roof' | 'finishes';
+export type MaterialGroupId = 'woods' | 'stone' | 'floors' | 'cladding' | 'joinery' | 'interiors';
+
+type Choice = { label: string; options: string[] };
 
 export type Dictionary = {
   meta: { title: string; description: string };
   nav: Record<NavKey, string>;
   ui: {
     menu: string; close: string; skip: string; language: string; tour: string; scroll: string;
-    configure: string; projects: string; contact: string; more: string; drag: string;
-    soonTitle: string; soonText: string; back: string; rights: string;
+    configure: string; configureShort: string; projects: string; contact: string; contactShort: string;
+    info: string; visit: string; whatsapp: string; more: string; drag: string; concept: string;
+    soonTitle: string; soonText: string; back: string; rights: string; from: string; pending: string;
   };
-  stations: Record<StationId, { name: string; title: string; text: string }>;
+  /** a title is one or more lines; *asterisks* mark the line set in italic */
+  stations: Record<StationId, { name: string; title: string[]; text: string }>;
   values: string[];
-  projects: { name: string; title: string; text: string; spaces: Record<SpaceId, string> };
-  systems: { name: string; title: string; text: string; items: Record<SystemId, { name: string; text: string; points: string[] }> };
-  materials: { name: string; title: string; text: string; items: Record<MaterialId, { name: string; text: string }> };
-  configurator: {
-    name: string; title: string; text: string;
-    floors: { label: string; options: string[] };
-    bedrooms: { label: string; options: string[] };
-    system: { label: string; options: string[] };
-    /** {floors} {bedrooms} {system} are replaced with the phrases below */
-    summary: string;
-    floorsPhrase: string[]; bedroomsPhrase: string[]; systemPhrase: string[];
+  projects: {
+    name: string; title: string[]; text: string; conceptNote: string;
+    spaces: Record<SpaceId, string>;
+    fields: { location: string; surface: string; year: string; system: string };
   };
-  process: { name: string; title: string; steps: { name: string; text: string }[] };
-  mineral: { title: string; text: string };
-  closing: { title: string; text: string };
+  systems: {
+    name: string; title: string[]; text: string; hint: string; note: string; fallback: string;
+    items: Record<SystemId, { name: string; text: string }>;
+    layers: Record<LayerId, { name: string; text: string; cellular?: string; timber?: string }>;
+  };
+  materials: {
+    name: string; title: string[]; text: string; note: string; sample: string;
+    groups: Record<MaterialGroupId, { name: string; samples: { name: string; where: string }[] }>;
+  };
+  configurator: {
+    name: string; title: string[]; text: string; step: string; summary: string; send: string; noPrice: string;
+    surface: { label: string; unit: string; hint: string };
+    floors: Choice; bedrooms: Choice; system: Choice; style: Choice; finishes: Choice;
+    extras: Choice & { hint: string };
+    none: string;
+  };
+  process: { name: string; title: string[]; text: string; steps: { name: string; text: string }[] };
+  mineral: {
+    name: string; title: string[]; text: string; audience: string;
+    slots: { name: string; text: string }[];
+    form: {
+      title: string; kind: Choice; units: string; name: string; company: string; email: string; phone: string;
+      message: string; submit: string; ready: string; error: string; required: string;
+    };
+  };
+  closing: { title: string[]; text: string };
 };
 
 const ca: Dictionary = {
   meta: {
-    title: 'ModularDom · Cases a mida, eficients i clau en mà',
-    description: 'Construïm la casa que imagines. Cases a mida, eficients i clau en mà.',
+    title: 'ModularDom · La vida que imagines comença aquí',
+    description: 'Cases a mida, eficients i clau en mà. Recorre una casa ModularDom i comença a configurar la teva.',
   },
   nav: {
     homes: 'Cases a mida', projects: 'Projectes', systems: 'Sistemes constructius', configurator: 'Configurador',
     mineral: 'ModularDom MINERAL', process: 'Com treballem', about: 'Qui som', contact: 'Contacte', clients: 'Àrea de clients',
   },
   ui: {
-    menu: 'Menú', close: 'Tancar', skip: 'Vés al contingut', language: 'Idioma', tour: 'Recorregut per la casa',
-    scroll: 'Desplaça’t per entrar', configure: 'Configura la teva casa', projects: 'Veure projectes',
-    contact: 'Parla amb nosaltres', more: 'Saber-ne més', drag: 'Arrossega',
+    menu: 'Menú', close: 'Tanca', skip: 'Vés al contingut', language: 'Idioma', tour: 'Recorregut per la casa',
+    scroll: 'Desplaça’t per entrar-hi', configure: 'Configura la teva casa', configureShort: 'Configurador',
+    projects: 'Veure projectes', contact: 'Parla amb nosaltres', contactShort: 'Contacte',
+    info: 'Sol·licita informació', visit: 'Reserva una visita', whatsapp: 'Escriu-nos per WhatsApp',
+    more: 'Saber-ne més', drag: 'Arrossega', concept: 'Visualització conceptual',
     soonTitle: 'Estem preparant aquesta pàgina.', soonText: 'Mentrestant, pots recórrer la casa o escriure’ns.',
-    back: 'Torna a l’inici', rights: 'Tots els drets reservats.',
+    back: 'Torna a l’inici', rights: 'Tots els drets reservats.', from: 'des de', pending: 'En preparació',
   },
   stations: {
-    exterior: { name: 'Exterior', title: 'Construïm la casa que imagines.', text: 'Cases a mida, eficients i clau en mà.' },
-    entrada: { name: 'Entrada', title: 'Una nova manera de construir.', text: 'Arquitectura, innovació i eficiència.' },
-    interior: { name: 'Interior', title: 'La teva casa. Les teves decisions.', text: 'Habitatges completament personalitzats.' },
-    cuina: { name: 'Cuina', title: 'El luxe és poder escollir.', text: 'Qualitats, materials, acabats i personalització.' },
+    exterior: { name: 'Exterior', title: ['La vida que imagines', '*comença aquí.*'], text: 'Cases a mida, eficients i clau en mà.' },
+    entrada: { name: 'Entrada', title: ['Redefinim la manera', '*de construir.*'], text: 'Arquitectura, innovació i eficiència.' },
+    interior: { name: 'Interior', title: ['Una casa tan única', '*com tu.*'], text: 'Habitatges completament personalitzats.' },
+    cuina: { name: 'Cuina', title: ['Cada detall.', 'Cada decisió.', '*Teva.*'], text: 'Qualitats, materials, acabats i personalització.' },
   },
   values: ['A mida', 'Eficients', 'Clau en mà'],
   projects: {
     name: 'Projectes',
-    title: 'Cada casa, una història diferent.',
-    text: 'Aquí presentarem les cases de ModularDom. Mentrestant, torna a mirar, espai a espai, la casa conceptual que acabes de recórrer.',
+    title: ['No construïm', '*dues cases iguals.*'],
+    text: 'Aquí publicarem les obres de ModularDom. Mentrestant, torna a mirar espai a espai la casa que acabes de recórrer.',
+    conceptNote: 'Casa conceptual. És una visualització, no una obra construïda.',
     spaces: { facana: 'Façana', acces: 'Accés', llindar: 'Llindar', sala: 'Sala', escala: 'Escala', cuina: 'Cuina' },
+    fields: { location: 'Ubicació', surface: 'Superfície', year: 'Any', system: 'Sistema' },
   },
   systems: {
     name: 'Sistemes constructius',
-    title: 'Dos sistemes per construir la mateixa idea.',
-    text: 'Formigó cel·lular o entramat lleuger de fusta. Triem el sistema amb tu, segons la casa i el lloc.',
+    title: ['Una casa,', '*capa a capa.*'],
+    text: 'Dos sistemes per construir la mateixa idea: formigó cel·lular o entramat lleuger de fusta. Desmunta la casa i mira què hi ha a dins.',
+    hint: 'Continua baixant per desmuntar-la',
+    note: 'Representació conceptual. No reflecteix gruixos, composicions ni prestacions.',
+    fallback: 'La visualització 3D no està disponible en aquest dispositiu.',
     items: {
-      cellular: {
-        name: 'Formigó cel·lular',
-        text: 'Blocs minerals lleugers que fan alhora de mur i d’aïllament.',
-        points: ['Material mineral', 'Aïllament dins el mateix mur', 'No combustible'],
-      },
-      timber: {
-        name: 'Entramat lleuger de fusta',
-        text: 'Una estructura de muntants de fusta, lleugera i de construcció en sec.',
-        points: ['Fusta estructural', 'Construcció en sec', 'Aïllament dins el gruix del mur'],
-      },
+      cellular: { name: 'Formigó cel·lular', text: 'Murs de blocs minerals.' },
+      timber: { name: 'Entramat lleuger de fusta', text: 'Estructura de muntants i bigues de fusta.' },
+    },
+    layers: {
+      foundation: { name: 'Fonamentació', text: 'La base sobre la qual s’aixeca la casa.' },
+      structure: { name: 'Estructura', text: 'El que aguanta la casa.', cellular: 'Murs de blocs de formigó cel·lular.', timber: 'Entramat de muntants i bigues de fusta.' },
+      envelope: { name: 'Tancaments', text: 'La pell que tanca l’estructura.' },
+      insulation: { name: 'Aïllaments', text: 'La capa que protegeix l’interior del fred i de la calor.' },
+      services: { name: 'Instal·lacions', text: 'Aigua, electricitat i climatització, integrades abans dels acabats.' },
+      roof: { name: 'Coberta', text: 'El pla que cobreix i protegeix la casa.' },
+      finishes: { name: 'Acabats', text: 'El que es veu i es toca: revestiments, fusteria i vidre.' },
     },
   },
   materials: {
     name: 'Qualitats i acabats',
-    title: 'Qualitats, materials i acabats.',
-    text: 'Pedra, fusta, vidre. Tu tries com ha de ser cada superfície de casa teva. Aquests són els de la casa del recorregut.',
-    items: {
-      traverti: { name: 'Travertí', text: 'A la façana, als graons i al paviment.' },
-      roure: { name: 'Roure', text: 'A la porta d’entrada i als panells de la cuina.' },
-      vidre: { name: 'Vidre', text: 'Tancaments de terra a sostre, oberts a la piscina.' },
-      pedra: { name: 'Pedra natural', text: 'A l’illa i al frontal de la cuina.' },
+    title: ['El luxe és', '*poder escollir.*'],
+    text: 'Fusta, pedra, vidre. Cada superfície de casa teva es tria amb tu.',
+    note: 'Mostres conceptuals, extretes de la visualització. Els materials de cada casa es defineixen al seu projecte.',
+    sample: 'Mostra conceptual',
+    groups: {
+      woods: { name: 'Fustes', samples: [{ name: 'Roure', where: 'Porta d’entrada' }, { name: 'Lamel·les de roure', where: 'Parament de l’escala' }] },
+      stone: { name: 'Pedra', samples: [{ name: 'Travertí', where: 'Façana' }, { name: 'Pedra amb veta', where: 'Illa de la cuina' }] },
+      floors: { name: 'Paviments', samples: [{ name: 'Pedra polida', where: 'Sala' }, { name: 'Graons il·luminats', where: 'Accés' }] },
+      cladding: { name: 'Revestiments', samples: [{ name: 'Panells de roure', where: 'Cuina' }, { name: 'Pedra clara', where: 'Mur de la llar de foc' }] },
+      joinery: { name: 'Fusteria', samples: [{ name: 'Tancaments de terra a sostre', where: 'Sala' }, { name: 'Porta pivotant', where: 'Entrada' }] },
+      interiors: { name: 'Acabats interiors', samples: [{ name: 'Llum integrada', where: 'Sostres i sòcols' }, { name: 'Tèxtils naturals', where: 'Sala' }] },
     },
   },
   configurator: {
     name: 'Configurador',
-    title: 'Comença pel que ja saps.',
-    text: 'Tres decisions per començar. La resta, la definim plegats.',
-    floors: { label: 'Plantes', options: ['Una', 'Dues'] },
-    bedrooms: { label: 'Dormitoris', options: ['2', '3', '4', '5 o més'] },
-    system: { label: 'Sistema', options: ['Formigó cel·lular', 'Entramat de fusta', 'Encara no ho sé'] },
-    summary: 'Una casa {floors}, {bedrooms}, {system}.',
-    floorsPhrase: ['d’una planta', 'de dues plantes'],
-    bedroomsPhrase: ['amb dos dormitoris', 'amb tres dormitoris', 'amb quatre dormitoris', 'amb cinc dormitoris o més'],
-    systemPhrase: ['en formigó cel·lular', 'en entramat lleuger de fusta', 'amb el sistema que triem plegats'],
+    title: ['Dissenya-la', '*al teu gust.*'],
+    text: 'Set decisions per començar a donar forma a casa teva. La resta, la definim plegats.',
+    step: 'Pas', summary: 'La teva casa', send: 'Continua al configurador',
+    noPrice: 'El pressupost el prepara l’equip de ModularDom a partir d’aquestes decisions.',
+    surface: { label: 'Superfície', unit: 'm²', hint: 'Superfície construïda aproximada.' },
+    floors: { label: 'Plantes', options: ['Una planta', 'Dues plantes'] },
+    bedrooms: { label: 'Habitacions', options: ['2', '3', '4', '5 o més'] },
+    system: { label: 'Sistema constructiu', options: ['Formigó cel·lular', 'Entramat lleuger de fusta', 'Aconselleu-me'] },
+    style: { label: 'Estil arquitectònic', options: ['Contemporani', 'Mediterrani', 'Encara no ho sé'] },
+    finishes: { label: 'Acabats', options: ['Clars i minerals', 'Càlids, amb fusta', 'Ho decidim junts'] },
+    extras: { label: 'Extres', options: ['Piscina', 'Porxo', 'Garatge', 'Domòtica', 'Plaques solars'], hint: 'Tria tot el que t’agradaria tenir.' },
+    none: 'Sense extres',
   },
   process: {
     name: 'Procés constructiu',
-    title: 'De la primera conversa a les claus.',
+    title: ['De la primera conversa', '*a les claus.*'],
+    text: 'Sis passos, sempre en el mateix ordre i sempre amb tu.',
     steps: [
-      { name: 'Escoltem', text: 'Ens expliques com vols viure i on.' },
-      { name: 'Projectem', text: 'Dissenyem la casa a mida i tanquem cada decisió amb tu.' },
-      { name: 'Construïm', text: 'Amb el sistema constructiu que hem triat plegats.' },
-      { name: 'Entreguem', text: 'La casa acabada, clau en mà.' },
+      { name: 'Primer contacte', text: 'Ens expliques com vols viure i on.' },
+      { name: 'Disseny i avantprojecte', text: 'Donem forma a la casa: distribució, volums i materials.' },
+      { name: 'Pressupost', text: 'Un pressupost detallat abans de comprometre’t.' },
+      { name: 'Projecte i llicència', text: 'Redactem el projecte i tramitem la llicència.' },
+      { name: 'Construcció', text: 'Construïm amb el sistema que hem triat plegats.' },
+      { name: 'Entrega de l’habitatge', text: 'La casa acabada, clau en mà.' },
     ],
   },
-  mineral: { title: 'ModularDom MINERAL', text: 'Una línia pròpia de ModularDom. En presentarem els detalls aquí.' },
-  closing: { title: 'La propera casa pot ser la teva.', text: 'Explica’ns com vols viure-hi. La dissenyem a mida i te l’entreguem clau en mà.' },
+  mineral: {
+    name: 'ModularDom MINERAL',
+    title: ['Bungalows de', 'formigó cel·lular.'],
+    text: 'La línia de ModularDom per a càmpings i complexos turístics.',
+    audience: 'Per a professionals',
+    slots: [
+      { name: 'Models', text: 'La gamma de bungalows.' },
+      { name: 'Plànols', text: 'Plantes i alçats de cada model.' },
+      { name: 'Distribucions', text: 'Opcions d’interior.' },
+      { name: 'Superfícies', text: 'Mides de cada model.' },
+      { name: 'Acabats i extres', text: 'Opcions d’equipament.' },
+    ],
+    form: {
+      title: 'Sol·licita un pressupost professional',
+      kind: { label: 'Establiment', options: ['Càmping', 'Complex turístic', 'Altres'] },
+      units: 'Unitats', name: 'Nom i cognoms', company: 'Empresa', email: 'Correu electrònic', phone: 'Telèfon',
+      message: 'Explica’ns el projecte', submit: 'Sol·licita pressupost',
+      ready: 'Sol·licitud preparada. L’enviament s’activarà quan connectem el CRM; ara no s’ha enviat res.',
+      error: 'No s’ha pogut enviar. Torna-ho a provar.', required: 'Cal omplir aquest camp.',
+    },
+  },
+  closing: { title: ['L’arquitectura', '*de viure.*'], text: 'Explica’ns com vols viure-hi. La dissenyem a mida i te l’entreguem clau en mà.' },
 };
 
 const es: Dictionary = {
   meta: {
-    title: 'ModularDom · Casas a medida, eficientes y llave en mano',
-    description: 'Construimos la casa que imaginas. Casas a medida, eficientes y llave en mano.',
+    title: 'ModularDom · La vida que imaginas empieza aquí',
+    description: 'Casas a medida, eficientes y llave en mano. Recorre una casa ModularDom y empieza a configurar la tuya.',
   },
   nav: {
     homes: 'Casas a medida', projects: 'Proyectos', systems: 'Sistemas constructivos', configurator: 'Configurador',
@@ -141,76 +200,114 @@ const es: Dictionary = {
   },
   ui: {
     menu: 'Menú', close: 'Cerrar', skip: 'Ir al contenido', language: 'Idioma', tour: 'Recorrido por la casa',
-    scroll: 'Desplázate para entrar', configure: 'Configura tu casa', projects: 'Ver proyectos',
-    contact: 'Habla con nosotros', more: 'Saber más', drag: 'Arrastra',
+    scroll: 'Desplázate para entrar', configure: 'Configura tu casa', configureShort: 'Configurador',
+    projects: 'Ver proyectos', contact: 'Habla con nosotros', contactShort: 'Contacto',
+    info: 'Solicita información', visit: 'Reserva una visita', whatsapp: 'Escríbenos por WhatsApp',
+    more: 'Saber más', drag: 'Arrastra', concept: 'Visualización conceptual',
     soonTitle: 'Estamos preparando esta página.', soonText: 'Mientras tanto, puedes recorrer la casa o escribirnos.',
-    back: 'Volver al inicio', rights: 'Todos los derechos reservados.',
+    back: 'Volver al inicio', rights: 'Todos los derechos reservados.', from: 'desde', pending: 'En preparación',
   },
   stations: {
-    exterior: { name: 'Exterior', title: 'Construimos la casa que imaginas.', text: 'Casas a medida, eficientes y llave en mano.' },
-    entrada: { name: 'Entrada', title: 'Una nueva manera de construir.', text: 'Arquitectura, innovación y eficiencia.' },
-    interior: { name: 'Interior', title: 'Tu casa. Tus decisiones.', text: 'Viviendas completamente personalizadas.' },
-    cuina: { name: 'Cocina', title: 'El lujo es poder elegir.', text: 'Calidades, materiales, acabados y personalización.' },
+    exterior: { name: 'Exterior', title: ['La vida que imaginas', '*empieza aquí.*'], text: 'Casas a medida, eficientes y llave en mano.' },
+    entrada: { name: 'Entrada', title: ['Redefinimos la manera', '*de construir.*'], text: 'Arquitectura, innovación y eficiencia.' },
+    interior: { name: 'Interior', title: ['Una casa tan única', '*como tú.*'], text: 'Viviendas completamente personalizadas.' },
+    cuina: { name: 'Cocina', title: ['Cada detalle.', 'Cada decisión.', '*Tuya.*'], text: 'Calidades, materiales, acabados y personalización.' },
   },
   values: ['A medida', 'Eficientes', 'Llave en mano'],
   projects: {
     name: 'Proyectos',
-    title: 'Cada casa, una historia diferente.',
-    text: 'Aquí presentaremos las casas de ModularDom. Mientras tanto, vuelve a mirar, espacio a espacio, la casa conceptual que acabas de recorrer.',
+    title: ['No construimos', '*dos casas iguales.*'],
+    text: 'Aquí publicaremos las obras de ModularDom. Mientras tanto, vuelve a mirar espacio a espacio la casa que acabas de recorrer.',
+    conceptNote: 'Casa conceptual. Es una visualización, no una obra construida.',
     spaces: { facana: 'Fachada', acces: 'Acceso', llindar: 'Umbral', sala: 'Salón', escala: 'Escalera', cuina: 'Cocina' },
+    fields: { location: 'Ubicación', surface: 'Superficie', year: 'Año', system: 'Sistema' },
   },
   systems: {
     name: 'Sistemas constructivos',
-    title: 'Dos sistemas para construir la misma idea.',
-    text: 'Hormigón celular o entramado ligero de madera. Elegimos el sistema contigo, según la casa y el lugar.',
+    title: ['Una casa,', '*capa a capa.*'],
+    text: 'Dos sistemas para construir la misma idea: hormigón celular o entramado ligero de madera. Desmonta la casa y mira qué hay dentro.',
+    hint: 'Sigue bajando para desmontarla',
+    note: 'Representación conceptual. No refleja espesores, composiciones ni prestaciones.',
+    fallback: 'La visualización 3D no está disponible en este dispositivo.',
     items: {
-      cellular: {
-        name: 'Hormigón celular',
-        text: 'Bloques minerales ligeros que hacen a la vez de muro y de aislamiento.',
-        points: ['Material mineral', 'Aislamiento en el propio muro', 'No combustible'],
-      },
-      timber: {
-        name: 'Entramado ligero de madera',
-        text: 'Una estructura de montantes de madera, ligera y de construcción en seco.',
-        points: ['Madera estructural', 'Construcción en seco', 'Aislamiento en el grosor del muro'],
-      },
+      cellular: { name: 'Hormigón celular', text: 'Muros de bloques minerales.' },
+      timber: { name: 'Entramado ligero de madera', text: 'Estructura de montantes y vigas de madera.' },
+    },
+    layers: {
+      foundation: { name: 'Cimentación', text: 'La base sobre la que se levanta la casa.' },
+      structure: { name: 'Estructura', text: 'Lo que sostiene la casa.', cellular: 'Muros de bloques de hormigón celular.', timber: 'Entramado de montantes y vigas de madera.' },
+      envelope: { name: 'Cerramientos', text: 'La piel que cierra la estructura.' },
+      insulation: { name: 'Aislamientos', text: 'La capa que protege el interior del frío y del calor.' },
+      services: { name: 'Instalaciones', text: 'Agua, electricidad y climatización, integradas antes de los acabados.' },
+      roof: { name: 'Cubierta', text: 'El plano que cubre y protege la casa.' },
+      finishes: { name: 'Acabados', text: 'Lo que se ve y se toca: revestimientos, carpintería y vidrio.' },
     },
   },
   materials: {
     name: 'Calidades y acabados',
-    title: 'Calidades, materiales y acabados.',
-    text: 'Piedra, madera, vidrio. Tú eliges cómo debe ser cada superficie de tu casa. Estos son los de la casa del recorrido.',
-    items: {
-      traverti: { name: 'Travertino', text: 'En la fachada, los peldaños y el pavimento.' },
-      roure: { name: 'Roble', text: 'En la puerta de entrada y los paneles de la cocina.' },
-      vidre: { name: 'Vidrio', text: 'Cerramientos de suelo a techo, abiertos a la piscina.' },
-      pedra: { name: 'Piedra natural', text: 'En la isla y el frente de la cocina.' },
+    title: ['El lujo es', '*poder elegir.*'],
+    text: 'Madera, piedra, vidrio. Cada superficie de tu casa se elige contigo.',
+    note: 'Muestras conceptuales, extraídas de la visualización. Los materiales de cada casa se definen en su proyecto.',
+    sample: 'Muestra conceptual',
+    groups: {
+      woods: { name: 'Maderas', samples: [{ name: 'Roble', where: 'Puerta de entrada' }, { name: 'Lamas de roble', where: 'Paramento de la escalera' }] },
+      stone: { name: 'Piedra', samples: [{ name: 'Travertino', where: 'Fachada' }, { name: 'Piedra con veta', where: 'Isla de la cocina' }] },
+      floors: { name: 'Pavimentos', samples: [{ name: 'Piedra pulida', where: 'Salón' }, { name: 'Peldaños iluminados', where: 'Acceso' }] },
+      cladding: { name: 'Revestimientos', samples: [{ name: 'Paneles de roble', where: 'Cocina' }, { name: 'Piedra clara', where: 'Muro de la chimenea' }] },
+      joinery: { name: 'Carpintería', samples: [{ name: 'Cerramientos de suelo a techo', where: 'Salón' }, { name: 'Puerta pivotante', where: 'Entrada' }] },
+      interiors: { name: 'Acabados interiores', samples: [{ name: 'Luz integrada', where: 'Techos y zócalos' }, { name: 'Textiles naturales', where: 'Salón' }] },
     },
   },
   configurator: {
     name: 'Configurador',
-    title: 'Empieza por lo que ya sabes.',
-    text: 'Tres decisiones para empezar. El resto lo definimos juntos.',
-    floors: { label: 'Plantas', options: ['Una', 'Dos'] },
-    bedrooms: { label: 'Dormitorios', options: ['2', '3', '4', '5 o más'] },
-    system: { label: 'Sistema', options: ['Hormigón celular', 'Entramado de madera', 'Aún no lo sé'] },
-    summary: 'Una casa {floors}, {bedrooms}, {system}.',
-    floorsPhrase: ['de una planta', 'de dos plantas'],
-    bedroomsPhrase: ['con dos dormitorios', 'con tres dormitorios', 'con cuatro dormitorios', 'con cinco dormitorios o más'],
-    systemPhrase: ['en hormigón celular', 'en entramado ligero de madera', 'con el sistema que elijamos juntos'],
+    title: ['Diséñala', '*a tu gusto.*'],
+    text: 'Siete decisiones para empezar a dar forma a tu casa. El resto lo definimos juntos.',
+    step: 'Paso', summary: 'Tu casa', send: 'Continúa en el configurador',
+    noPrice: 'El presupuesto lo prepara el equipo de ModularDom a partir de estas decisiones.',
+    surface: { label: 'Superficie', unit: 'm²', hint: 'Superficie construida aproximada.' },
+    floors: { label: 'Plantas', options: ['Una planta', 'Dos plantas'] },
+    bedrooms: { label: 'Habitaciones', options: ['2', '3', '4', '5 o más'] },
+    system: { label: 'Sistema constructivo', options: ['Hormigón celular', 'Entramado ligero de madera', 'Aconsejadme'] },
+    style: { label: 'Estilo arquitectónico', options: ['Contemporáneo', 'Mediterráneo', 'Aún no lo sé'] },
+    finishes: { label: 'Acabados', options: ['Claros y minerales', 'Cálidos, con madera', 'Lo decidimos juntos'] },
+    extras: { label: 'Extras', options: ['Piscina', 'Porche', 'Garaje', 'Domótica', 'Placas solares'], hint: 'Elige todo lo que te gustaría tener.' },
+    none: 'Sin extras',
   },
   process: {
     name: 'Proceso constructivo',
-    title: 'De la primera conversación a las llaves.',
+    title: ['De la primera conversación', '*a las llaves.*'],
+    text: 'Seis pasos, siempre en el mismo orden y siempre contigo.',
     steps: [
-      { name: 'Escuchamos', text: 'Nos cuentas cómo quieres vivir y dónde.' },
-      { name: 'Proyectamos', text: 'Diseñamos la casa a medida y cerramos cada decisión contigo.' },
-      { name: 'Construimos', text: 'Con el sistema constructivo que hemos elegido juntos.' },
-      { name: 'Entregamos', text: 'La casa terminada, llave en mano.' },
+      { name: 'Primer contacto', text: 'Nos cuentas cómo quieres vivir y dónde.' },
+      { name: 'Diseño y anteproyecto', text: 'Damos forma a la casa: distribución, volúmenes y materiales.' },
+      { name: 'Presupuesto', text: 'Un presupuesto detallado antes de comprometerte.' },
+      { name: 'Proyecto y licencia', text: 'Redactamos el proyecto y tramitamos la licencia.' },
+      { name: 'Construcción', text: 'Construimos con el sistema que hemos elegido juntos.' },
+      { name: 'Entrega de la vivienda', text: 'La casa terminada, llave en mano.' },
     ],
   },
-  mineral: { title: 'ModularDom MINERAL', text: 'Una línea propia de ModularDom. Presentaremos aquí sus detalles.' },
-  closing: { title: 'La próxima casa puede ser la tuya.', text: 'Cuéntanos cómo quieres vivir en ella. La diseñamos a medida y te la entregamos llave en mano.' },
+  mineral: {
+    name: 'ModularDom MINERAL',
+    title: ['Bungalows de', 'hormigón celular.'],
+    text: 'La línea de ModularDom para campings y complejos turísticos.',
+    audience: 'Para profesionales',
+    slots: [
+      { name: 'Modelos', text: 'La gama de bungalows.' },
+      { name: 'Planos', text: 'Plantas y alzados de cada modelo.' },
+      { name: 'Distribuciones', text: 'Opciones de interior.' },
+      { name: 'Superficies', text: 'Medidas de cada modelo.' },
+      { name: 'Acabados y extras', text: 'Opciones de equipamiento.' },
+    ],
+    form: {
+      title: 'Solicita un presupuesto profesional',
+      kind: { label: 'Establecimiento', options: ['Camping', 'Complejo turístico', 'Otros'] },
+      units: 'Unidades', name: 'Nombre y apellidos', company: 'Empresa', email: 'Correo electrónico', phone: 'Teléfono',
+      message: 'Cuéntanos el proyecto', submit: 'Solicita presupuesto',
+      ready: 'Solicitud preparada. El envío se activará cuando conectemos el CRM; ahora no se ha enviado nada.',
+      error: 'No se ha podido enviar. Inténtalo de nuevo.', required: 'Hay que rellenar este campo.',
+    },
+  },
+  closing: { title: ['La arquitectura', '*de vivir.*'], text: 'Cuéntanos cómo quieres vivir en ella. La diseñamos a medida y te la entregamos llave en mano.' },
 };
 
 export const dictionaries: Record<Locale, Dictionary> = { ca, es };
