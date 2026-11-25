@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Reveal } from '@/components/ui/Reveal';
 import type { Dictionary, Locale } from '@/content/i18n';
+import { MINERAL_MODELS } from '@/content/mineral';
 import { submitLead } from '@/lib/crm';
 
 /*
@@ -64,8 +65,27 @@ export function Mineral({ dict, lang }: { dict: Dictionary; lang: Locale }) {
           </p>
         </Reveal>
 
-        {/* what will be published: a specification sheet with its rows still open */}
-        <dl className="md:col-span-4 md:col-start-9 md:self-end">
+        {/* the catalogue: its models once ModularDom approves them (src/content/mineral.ts) */}
+        {MINERAL_MODELS.length > 0 && (
+          <ul className="grid gap-6 sm:grid-cols-2 md:col-span-12 md:grid-cols-3">
+            {MINERAL_MODELS.map((x) => (
+              <li key={x.id} className="border border-current/25">
+                {x.plan && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={x.plan} alt="" loading="lazy" className="aspect-[4/3] w-full border-b border-current/25 object-contain p-6" />
+                )}
+                <div className="p-5">
+                  <h3 className="text-[1.35rem] font-medium tracking-[-0.02em]">{x.name}</h3>
+                  <p className="mt-1 text-[0.9375rem] opacity-80">{[x.surface && `${x.surface} m²`, x.layout?.[lang]].filter(Boolean).join(' · ')}</p>
+                  {x.finishes && <p className="t-note mt-3 opacity-70">{x.finishes[lang].join(' · ')}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* until then: what the catalogue will hold, as a specification sheet with its rows still open */}
+        <dl className={`md:col-span-4 md:col-start-9 md:self-end ${MINERAL_MODELS.length ? 'hidden' : ''}`}>
           {m.slots.map((s) => (
             <div key={s.name} className="grid grid-cols-[1fr_auto] items-baseline gap-x-6 border-t border-current/25 py-3 last:border-b">
               <dt>

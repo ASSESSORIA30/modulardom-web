@@ -15,7 +15,7 @@ import { TOUR, focusAt, frameAt, tourUrl, type Tier } from '@/content/tour';
             for) is decoded off the main thread into bitmaps, and drawing is only ever a blit.
             When the camera outruns the decoders, every 2nd, 4th … frame is prepared instead.
   Sizes     sm 864x1536 for phones, md 1920 for landscape. Screens that can show more get 2560:
-            · strong machines (8+ cores, 8+ GB, a fast line) scrub the whole tour at 2560, and step
+            · strong machines (6+ cores, 8+ GB, a fast line) scrub the whole tour at 2560, and step
               down to 1920 by themselves if decoding cannot keep up;
             · the others scrub at 1920 and, when the camera rests, the 2560 frame fades in over it
               (a fade, not a swap, so sharpness never jumps).
@@ -34,7 +34,7 @@ const KEEP = 140; // compressed frames further than this from the camera are rel
 const REST_MS = 140;
 const FADE_MS = 260;
 // spring stiffness (rad/s): how eagerly the camera closes on the scroll
-const OMEGA = { wheel: 24, touch: 15 };
+const OMEGA = { wheel: 30, touch: 17 };
 // decoders running at once: leave cores for the page itself
 const CORES = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
 const DECODERS = Math.max(1, Math.min(4, CORES - 2));
@@ -100,7 +100,7 @@ export class TourEngine {
     this.stride = saver || /2g/.test(type) ? 4 : type === '3g' || mem <= 2 ? 2 : 1;
     this.parallel = this.slow ? 3 : 6;
     this.roomy = mem >= 8;
-    this.strong = !this.slow && this.roomy && CORES >= 8;
+    this.strong = !this.slow && this.roomy && CORES >= 6;
     // ?tourtier=hd|md forces a size (for testing on machines that would not choose it)
     const q = /[?&]tourtier=(hd|md|sm)/.exec(location.search);
     if (q) this.forced = q[1] as Scrub;

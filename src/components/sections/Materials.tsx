@@ -113,6 +113,23 @@ export function Materials({ dict }: { dict: Dictionary }) {
         </div>
 
         <p className="t-note max-w-[40ch] text-ink/70 md:col-span-4 md:row-start-3">{m.note}</p>
+
+        {/* what ModularDom commits to in writing: its published quality specification */}
+        <Reveal className="border-t border-ink/25 pt-10 md:col-span-12 md:mt-10 md:grid md:grid-cols-12 md:gap-x-8 md:pt-14">
+          <h3 className="t-serif text-[clamp(1.6rem,1.2rem+1.4vw,2.4rem)] leading-tight md:col-span-4">
+            <span className="line">
+              <span data-line>{m.spec.title}</span>
+            </span>
+          </h3>
+          <dl className="mt-6 grid gap-x-8 sm:grid-cols-2 md:col-span-8 md:mt-0">
+            {m.spec.items.map((it, i) => (
+              <div key={it.name} className="border-t border-ink/20 py-4" data-fade style={{ '--i': i } as React.CSSProperties}>
+                <dt className="font-medium">{it.name}</dt>
+                <dd className="mt-1 text-[0.9375rem] text-ink/80">{it.text}</dd>
+              </div>
+            ))}
+          </dl>
+        </Reveal>
       </div>
     </section>
   );

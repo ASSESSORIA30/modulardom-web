@@ -1,16 +1,27 @@
 import * as THREE from 'three';
 import type { LayerId, SystemId } from '@/content/i18n';
+import { makeEnvironment, makeTextures, worldUv } from './materials';
 
 /*
-  A conceptual house, built in code and taken apart layer by layer.
+  A conceptual house as an architect's presentation model, built in code and taken apart layer by
+  layer.
 
-  Everything is instanced boxes: blocks, studs, boards, panes. No model file, no textures.
-  Dimensions are compositional (they make the drawing read), never technical: nothing here states
-  a real thickness, build-up or performance.
+  Geometry  Instanced boxes (blocks, studs, boards, panes): no model file.
+  Light     Image-based lighting from a small environment generated at start (a dusk sky with a
+            warm key and a cool fill, see materials.ts), one sun with soft shadows, and a contact
+            shadow under the model. No HDR file is downloaded.
+  Surface   PBR materials with procedural colour, roughness and relief maps, laid in world space
+            so a board and a wall share the same grain scale; every block, stud and board carries a
+            slight tint of its own, as cut material does.
+  Honesty   Dimensions are compositional (they make the model read), never technical: nothing here
+            states a real thickness, build-up or performance.
 
-  The scene renders on demand: only while something is still moving towards its target.
-  Used twice: the "layers" section (scroll takes it apart) and the configurator (assembled,
-  reacting to the choices).
+  Cost      The scene renders on demand: only while something is still moving towards its target.
+            Shadows are redrawn only when geometry moves, not when the camera turns. If frames come
+            slowly the scene steps its own quality down (resolution first, then sun shadows), so a
+            modest GPU gets a lighter picture instead of a stuttering page.
+  Used twice: the "layers" section (the scroll takes it apart) and the configurator (assembled, on
+  its plot, answering the choices).
 */
 
 export const LAYERS: LayerId[] = ['finishes', 'roof', 'insulation', 'envelope', 'services', 'structure', 'foundation'];
@@ -20,43 +31,30 @@ export type HouseConfig = {
   /** footprint stretch along the long side, 0.8 … 1.35 */
   width: number;
   system: SystemId;
+  /** façade: stone throughout, or the upper volume in timber */
   finish: 'mineral' | 'wood';
+  /** massing: one bar, or an L with a single-storey wing */
+  volume: 'compact' | 'L';
+  roof: 'flat' | 'green';
   pool: boolean;
   porch: boolean;
   garage: boolean;
   solar: boolean;
 };
 
-export const DEFAULT_CONFIG: HouseConfig = { floors: 2, width: 1, system: 'cellular', finish: 'mineral', pool: false, porch: false, garage: false, solar: false };
+export const DEFAULT_CONFIG: HouseConfig = { floors: 2, width: 1, system: 'cellular', finish: 'mineral', volume: 'compact', roof: 'flat', pool: false, porch: false, garage: false, solar: false };
 
 type Box = { p: [number, number, number]; s: [number, number, number] };
 type Opening = { a: number; b: number; y0: number; y1: number; door?: boolean };
 type Wall = { vol: 'G' | 'U'; s: [number, number]; d: [number, number]; n: [number, number]; len: number; y: number; h: number; open: Opening[] };
 
-const COLORS = {
-  foundation: 0x9c9b95,
-  block: 0xf2f0ea,
-  timber: 0xd09a55,
-  slab: 0xd9d5cb,
-  envelope: 0xb9b2a4,
-  insulation: 0xe2c96f,
-  copper: 0xc47a3e,
-  water: 0x3f9e97,
-  duct: 0xb9bdc0,
-  roof: 0x5d6466,
-  skin: 0xefe6d6,
-  skinWood: 0xa9794d,
-  glass: 0xa9cdd3,
-  frame: 0x1b2021,
-  oak: 0x9a6a42,
-  dim: 0x394141,
-  pool: 0x4aa7a0,
-};
-
 const ss = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+// a fixed sequence, so the model looks the same on every visit
+let seed = 7;
+const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 
 /* —— the house, as walls with openings —— */
 
@@ -76,16 +74,16 @@ function wallsOf(v: typeof G, vol: 'G' | 'U', open: Opening[][]): Wall[] {
 
 const WALLS: Wall[] = [
   ...wallsOf(G, 'G', [
-    [{ a: 0.8, b: 7.2, y0: 0.12, y1: 2.7 }, { a: 8.4, b: 10.2, y0: 0, y1: 2.6, door: true }],
+    [{ a: 0.8, b: 7.2, y0: 0.1, y1: 2.72 }, { a: 8.5, b: 10.1, y0: 0, y1: 2.6, door: true }],
     [{ a: 2.2, b: 5.8, y0: 0.9, y1: 2.5 }],
     [{ a: 1.5, b: 4, y0: 0.9, y1: 2.5 }, { a: 7, b: 10.5, y0: 0.9, y1: 2.5 }],
-    [{ a: 1, b: 7, y0: 0.12, y1: 2.7 }],
+    [{ a: 1, b: 7, y0: 0.1, y1: 2.72 }],
   ]),
   ...wallsOf(U, 'U', [
-    [{ a: 0.8, b: 7.2, y0: 0.12, y1: 2.5 }],
+    [{ a: 0.8, b: 7.2, y0: 0.1, y1: 2.5 }],
     [{ a: 1.5, b: 4.5, y0: 0.9, y1: 2.3 }],
     [{ a: 1.2, b: 3.4, y0: 0.9, y1: 2.3 }, { a: 4.8, b: 7, y0: 0.9, y1: 2.3 }],
-    [{ a: 0.9, b: 5.1, y0: 0.12, y1: 2.5 }],
+    [{ a: 0.9, b: 5.1, y0: 0.1, y1: 2.5 }],
   ]),
 ];
 
@@ -114,9 +112,21 @@ function onWall(w: Wall, u0: number, u1: number, v0: number, v1: number, off: nu
   };
 }
 
-/** a continuous layer outside the structure: one board per solid, corners closed */
-function skin(w: Wall, off: number, th: number): Box[] {
-  return solids(w).map(([u0, u1, v0, v1]) => onWall(w, u0 <= 0 ? -(off + th) : u0, u1 >= w.len ? w.len + off + th : u1, v0, v1, off, th));
+/** a continuous layer outside the structure, corners closed; `course` cuts it into boards or slabs */
+function skin(w: Wall, off: number, th: number, course = 0): Box[] {
+  const out: Box[] = [];
+  for (const [u0, u1, v0, v1] of solids(w)) {
+    const a = u0 <= 0 ? -(off + th) : u0;
+    const b = u1 >= w.len ? w.len + off + th : u1;
+    if (!course) {
+      out.push(onWall(w, a, b, v0, v1, off, th));
+      continue;
+    }
+    // stone slabs / boards, with a hairline joint
+    const n = Math.max(1, Math.round((b - a) / course));
+    for (let i = 0; i < n; i++) out.push(onWall(w, a + ((b - a) * i) / n + 0.006, a + ((b - a) * (i + 1)) / n - 0.006, v0, v1, off, th));
+  }
+  return out;
 }
 
 const T = 0.3; // structural wall, compositional
@@ -124,7 +134,7 @@ function blocks(w: Wall): Box[] {
   const out: Box[] = [];
   const bl = 0.62;
   const bh = 0.25;
-  const gap = 0.014;
+  const gap = 0.012;
   for (const [u0, u1, v0, v1] of solids(w)) {
     let row = Math.round(v0 / bh);
     for (let v = v0; v < v1 - 0.01; v += bh, row++) {
@@ -143,11 +153,12 @@ function blocks(w: Wall): Box[] {
 
 function studs(w: Wall): Box[] {
   const out: Box[] = [];
-  const sw = 0.07;
+  const sw = 0.065;
   const d = 0.2;
   const off = -d - 0.02;
   for (const [u0, u1, v0, v1] of solids(w)) {
     out.push(onWall(w, u0, u1, v0, v0 + sw, off, d), onWall(w, u0, u1, v1 - sw, v1, off, d));
+    if (v1 - v0 > 1.6) out.push(onWall(w, u0, u1, (v0 + v1) / 2 - sw / 2, (v0 + v1) / 2 + sw / 2, off + 0.03, d - 0.06)); // noggings
     const n = Math.max(1, Math.round((u1 - u0) / 0.6));
     for (let i = 0; i <= n; i++) {
       const u = u0 + ((u1 - u0 - sw) * i) / n;
@@ -157,107 +168,135 @@ function studs(w: Wall): Box[] {
   return out;
 }
 
-function glazing(w: Wall): { glass: Box[]; frames: Box[]; doors: Box[] } {
+/** a window: glass set back in a reveal, a slim dark frame, tall panes, a stone sill */
+function glazing(w: Wall): { glass: Box[]; frames: Box[]; doors: Box[]; sills: Box[]; reveals: Box[] } {
+  const reveals: Box[] = [];
   const glass: Box[] = [];
   const frames: Box[] = [];
   const doors: Box[] = [];
-  const f = 0.07;
+  const sills: Box[] = [];
+  const f = 0.055;
   for (const o of w.open) {
-    if (o.door) doors.push(onWall(w, o.a + f, o.b - f, o.y0, o.y1 - f, 0.04, 0.08));
-    else {
-      glass.push(onWall(w, o.a, o.b, o.y0, o.y1, 0.08, 0.03));
-      // mullions: tall panes, as in the house of the tour
-      const n = Math.max(1, Math.round((o.b - o.a) / 1.7));
+    if (o.door) {
+      doors.push(onWall(w, o.a + f, o.b - f, o.y0 + 0.02, o.y1 - f, -0.02, 0.07));
+      frames.push(onWall(w, o.b - 0.34, o.b - 0.3, 0.95, 1.75, 0.05, 0.05)); // pull handle
+    } else {
+      glass.push(onWall(w, o.a + f, o.b - f, o.y0 + f, o.y1 - f, -0.06, 0.03));
+      const n = Math.max(1, Math.round((o.b - o.a) / 1.6));
       for (let i = 1; i < n; i++) {
         const u = o.a + ((o.b - o.a) * i) / n;
-        frames.push(onWall(w, u - f / 2, u + f / 2, o.y0, o.y1, 0.05, 0.1));
+        frames.push(onWall(w, u - f / 2, u + f / 2, o.y0 + f, o.y1 - f, -0.1, 0.11));
       }
+      if (o.y0 > 0.5) sills.push(onWall(w, o.a - 0.06, o.b + 0.06, o.y0 - 0.06, o.y0, 0.19, 0.14));
     }
-    frames.push(
-      onWall(w, o.a, o.a + f, o.y0, o.y1, 0.05, 0.1),
-      onWall(w, o.b - f, o.b, o.y0, o.y1, 0.05, 0.1),
-      onWall(w, o.a, o.b, o.y1 - f, o.y1, 0.05, 0.1),
+    // the opening is lined in the façade material, so no inner layer shows at its edge
+    const r = 0.035;
+    reveals.push(
+      onWall(w, o.a - r, o.a, o.y0, o.y1, -0.14, 0.39),
+      onWall(w, o.b, o.b + r, o.y0, o.y1, -0.14, 0.39),
+      onWall(w, o.a - r, o.b + r, o.y1, o.y1 + r, -0.14, 0.39),
     );
-    if (o.y0 > 0.05) frames.push(onWall(w, o.a, o.b, o.y0, o.y0 + f, 0.05, 0.1));
+    if (o.y0 > 0.05) reveals.push(onWall(w, o.a - r, o.b + r, o.y0 - r, o.y0, -0.14, 0.39));
+    // the frame sits in the reveal, behind the face of the wall
+    frames.push(
+      onWall(w, o.a, o.a + f, o.y0, o.y1, -0.12, 0.14),
+      onWall(w, o.b - f, o.b, o.y0, o.y1, -0.12, 0.14),
+      onWall(w, o.a, o.b, o.y1 - f, o.y1, -0.12, 0.14),
+      onWall(w, o.a, o.b, o.y0, o.y0 + f, -0.12, 0.14),
+    );
   }
-  return { glass, frames, doors };
+  return { glass, frames, doors, sills, reveals };
 }
 
 /* —— scene —— */
 
-type Part = { mesh: THREE.Object3D; layer: LayerId; vol: 'G' | 'U' | 'base'; n: [number, number]; system?: SystemId; only?: 1 | 2 };
+type Part = { mesh: THREE.InstancedMesh; layer: LayerId; vol: 'G' | 'U' | 'base'; n: [number, number]; system?: SystemId; only?: 1 | 2; y0: number };
 
 export type HouseScene = {
   /** 0 assembled → 1 fully apart */
   setProgress(t: number): void;
   setFocus(layer: LayerId | null): void;
   setConfig(c: Partial<HouseConfig>): void;
-  /** radians added to the camera's turn (drag, pointer) */
+  /** radians added to the camera's turn (drag) */
   setTurn(a: number): void;
-  setAutoRotate(on: boolean): void;
   resize(): void;
   setActive(on: boolean): void;
   dispose(): void;
 };
 
-export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layers' | 'config'; onFrame?: () => void }): HouseScene {
+export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layers' | 'config' }): HouseScene {
+  seed = 7;
+  const layers = opts.mode === 'layers';
+  const small = Math.min(window.innerWidth, window.innerHeight) < 600;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
+  renderer.toneMappingExposure = 0.98;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(26, 1, 1, 200);
-  const root = new THREE.Group();
-  scene.add(root);
+  const env = makeEnvironment(renderer);
+  scene.environment = env;
+  scene.environmentIntensity = 0.9;
+  const tex = makeTextures();
+  const camera = new THREE.PerspectiveCamera(21, 1, 1, 260);
+  const root = new THREE.Group(); // the house: stretches with the chosen surface
+  const site = new THREE.Group(); // the plot: stays put
+  scene.add(root, site);
 
-  scene.add(new THREE.HemisphereLight(0xfff3e0, 0x1b2224, 1.05));
-  const sun = new THREE.DirectionalLight(0xffe2bd, 2.6);
-  sun.position.set(14, 22, 16);
+  const sun = new THREE.DirectionalLight(0xffdcb0, 2.3);
+  sun.position.set(13, 21, 17);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.03;
-  Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 80 });
+  // a 4096 map only where it is cheap: dense screens on machines with cores to spare
+  const big = !small && (window.devicePixelRatio || 1) >= 2 && (navigator.hardwareConcurrency || 4) >= 8;
+  sun.shadow.mapSize.setScalar(big ? 4096 : 2048);
+  sun.shadow.bias = -0.0003;
+  sun.shadow.normalBias = 0.025;
+  Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 90 });
   scene.add(sun);
-  const fill = new THREE.DirectionalLight(0xa8d8e0, 0.55);
-  fill.position.set(-16, 9, -12);
-  scene.add(fill);
-
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 64), new THREE.ShadowMaterial({ opacity: 0.38 }));
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  const rim = new THREE.DirectionalLight(0xa9d2e2, 0.5);
+  rim.position.set(-18, 10, -14);
+  scene.add(rim);
 
   const unit = new THREE.BoxGeometry(1, 1, 1);
-  const mats = new Map<string, { m: THREE.MeshStandardMaterial; base: THREE.Color; layer: LayerId }>();
-  const mat = (key: string, layer: LayerId, color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => {
-    const m = new THREE.MeshStandardMaterial({ color, roughness: 0.82, metalness: 0, ...extra });
-    mats.set(key, { m, base: new THREE.Color(color), layer });
+  const disposables: { dispose(): void }[] = [unit, env, ...Object.values(tex)];
+
+  type Mat = { m: THREE.MeshStandardMaterial; base: THREE.Color; layer: LayerId; alpha: number; system?: SystemId };
+  const mats = new Map<string, Mat>();
+  const mat = (key: string, layer: LayerId, color: number, p: THREE.MeshStandardMaterialParameters = {}, tile = 0, system?: SystemId) => {
+    const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...p });
+    if (tile) worldUv(m, tile);
+    mats.set(key, { m, base: new THREE.Color(color), layer, alpha: p.opacity ?? 1, system });
+    disposables.push(m);
     return m;
   };
   const M = {
-    foundation: mat('foundation', 'foundation', COLORS.foundation, { roughness: 0.95 }),
-    block: mat('block', 'structure', COLORS.block, { roughness: 0.9 }),
-    timber: mat('timber', 'structure', COLORS.timber, { roughness: 0.7 }),
-    slab: mat('slab', 'structure', COLORS.slab, { roughness: 0.9 }),
-    envelope: mat('envelope', 'envelope', COLORS.envelope),
-    insulation: mat('insulation', 'insulation', COLORS.insulation, { roughness: 1 }),
-    copper: mat('copper', 'services', COLORS.copper, { roughness: 0.4, metalness: 0.6 }),
-    water: mat('water', 'services', COLORS.water, { roughness: 0.5 }),
-    duct: mat('duct', 'services', COLORS.duct, { roughness: 0.45, metalness: 0.5 }),
-    roof: mat('roof', 'roof', COLORS.roof, { roughness: 0.9 }),
-    skin: mat('skin', 'finishes', COLORS.skin, { roughness: 0.75 }),
-    glass: mat('glass', 'finishes', COLORS.glass, { roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.3 }),
-    frame: mat('frame', 'finishes', COLORS.frame, { roughness: 0.5, metalness: 0.3 }),
-    oak: mat('oak', 'finishes', COLORS.oak, { roughness: 0.6 }),
+    foundation: mat('foundation', 'foundation', 0xa7a59e, { roughness: 0.95, map: tex.mottle, bumpMap: tex.grit, bumpScale: 1.2 }, 0.35),
+    block: mat('block', 'structure', 0xf4f2ec, { roughness: 0.96, bumpMap: tex.grit, bumpScale: 0.9 }, 1.6, 'cellular'),
+    slab: mat('slab', 'structure', 0xe2dfd6, { roughness: 0.94, map: tex.mottle, bumpMap: tex.grit, bumpScale: 0.8 }, 0.4, 'cellular'),
+    timber: mat('timber', 'structure', 0xd9a765, { roughness: 0.62, map: tex.grain, bumpMap: tex.grain, bumpScale: 0.5 }, 1.1, 'timber'),
+    envelope: mat('envelope', 'envelope', 0xc4bcab, { roughness: 0.8, map: tex.board, bumpMap: tex.grit, bumpScale: 0.5 }, 0.55),
+    insulation: mat('insulation', 'insulation', 0xdcc98a, { roughness: 1, map: tex.fibre, bumpMap: tex.fibre, bumpScale: 2.2 }, 0.8),
+    copper: mat('copper', 'services', 0xc98045, { roughness: 0.32, metalness: 0.9, envMapIntensity: 1.3 }),
+    water: mat('water', 'services', 0x3f9e97, { roughness: 0.4, metalness: 0.1 }),
+    duct: mat('duct', 'services', 0xc8ccd0, { roughness: 0.3, metalness: 0.85, envMapIntensity: 1.2 }),
+    roof: mat('roof', 'roof', 0x676d6e, { roughness: 0.95, map: tex.mottle, bumpMap: tex.grit, bumpScale: 1.6 }, 0.6),
+    coping: mat('coping', 'roof', 0x2a2f31, { roughness: 0.45, metalness: 0.6 }),
+    skin: mat('skin', 'finishes', 0xf1e7d6, { roughness: 0.7, map: tex.stone, bumpMap: tex.grit, bumpScale: 0.45 }, 0.3),
+    reveal: mat('reveal', 'finishes', 0xe9dfcd, { roughness: 0.75 }),
+    skinU: mat('skinU', 'finishes', 0xf1e7d6, { roughness: 0.7, map: tex.stone, bumpMap: tex.grit, bumpScale: 0.45 }, 0.3),
+    glass: mat('glass', 'finishes', 0x1c2a31, { roughness: 0.04, metalness: 0, transparent: true, opacity: 0.46, envMapIntensity: 2.4 }),
+    frame: mat('frame', 'finishes', 0x191d1f, { roughness: 0.42, metalness: 0.7 }),
+    oak: mat('oak', 'finishes', 0x9c6b42, { roughness: 0.55, map: tex.grain, bumpMap: tex.grain, bumpScale: 0.4 }, 0.9),
   };
 
   const parts: Part[] = [];
   const dummy = new THREE.Object3D();
-  const add = (boxes: Box[], material: THREE.Material, p: Omit<Part, 'mesh'>, shadow = true) => {
+  const tint = new THREE.Color();
+  /** `vary`: how much each piece's tone differs from its neighbours */
+  const add = (boxes: Box[], material: THREE.Material, p: Omit<Part, 'mesh' | 'y0'>, vary = 0, shadow = true) => {
     if (!boxes.length) return;
     const mesh = new THREE.InstancedMesh(unit, material, boxes.length);
     boxes.forEach((b, i) => {
@@ -265,25 +304,31 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
       dummy.scale.set(...b.s);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
+      if (vary) {
+        const k = 1 - vary / 2 + rnd() * vary;
+        mesh.setColorAt(i, tint.setRGB(k, k * (1 - rnd() * vary * 0.25), k * (1 - rnd() * vary * 0.5)));
+      }
     });
     mesh.castShadow = shadow;
     mesh.receiveShadow = true;
     root.add(mesh);
-    parts.push({ mesh, ...p });
+    parts.push({ mesh, y0: p.vol === 'U' ? U.y : 0, ...p });
   };
 
   // walls, layer by layer
   for (const w of WALLS) {
     const base = { vol: w.vol, n: w.n } as const;
-    add(blocks(w), M.block, { ...base, layer: 'structure', system: 'cellular' });
-    add(studs(w), M.timber, { ...base, layer: 'structure', system: 'timber' });
-    add(skin(w, 0, 0.05), M.envelope, { ...base, layer: 'envelope' });
-    add(skin(w, 0.05, 0.14), M.insulation, { ...base, layer: 'insulation' });
-    add(skin(w, 0.19, 0.06), M.skin, { ...base, layer: 'finishes' });
+    add(blocks(w), M.block, { ...base, layer: 'structure', system: 'cellular' }, 0.07);
+    add(studs(w), M.timber, { ...base, layer: 'structure', system: 'timber' }, 0.16);
+    add(skin(w, 0, 0.05, 1.2), M.envelope, { ...base, layer: 'envelope' }, 0.08);
+    add(skin(w, 0.05, 0.14, 0.6), M.insulation, { ...base, layer: 'insulation' }, 0.1);
+    add(skin(w, 0.19, 0.06, 1.5), w.vol === 'U' ? M.skinU : M.skin, { ...base, layer: 'finishes' }, 0.045);
     const g = glazing(w);
-    add(g.glass, M.glass, { ...base, layer: 'finishes' }, false);
+    add(g.glass, M.glass, { ...base, layer: 'finishes' }, 0, false);
     add(g.frames, M.frame, { ...base, layer: 'finishes' });
-    add(g.doors, M.oak, { ...base, layer: 'finishes' });
+    add(g.doors, M.oak, { ...base, layer: 'finishes' }, 0.05);
+    add(g.sills, w.vol === 'U' ? M.skinU : M.skin, { ...base, layer: 'finishes' });
+    add(g.reveals, M.reveal, { ...base, layer: 'finishes' });
   }
 
   // foundation: a slab on strip footings
@@ -301,75 +346,74 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
     { layer: 'foundation', vol: 'base', n: none },
   );
 
-  // floors: solid slabs in aerated concrete, joists in timber
+  // floors: solid slabs in aerated concrete, joists and deck in timber
   const joists = (x0: number, x1: number, z0: number, z1: number, y: number): Box[] => {
     const out: Box[] = [];
-    for (let x = x0 + 0.04; x <= x1; x += 0.6) out.push({ p: [x, y, (z0 + z1) / 2], s: [0.08, 0.26, z1 - z0] });
-    out.push({ p: [(x0 + x1) / 2, y, z0 + 0.04], s: [x1 - x0, 0.26, 0.08] }, { p: [(x0 + x1) / 2, y, z1 - 0.04], s: [x1 - x0, 0.26, 0.08] });
+    for (let x = x0 + 0.04; x <= x1; x += 0.6) out.push({ p: [x, y, (z0 + z1) / 2], s: [0.07, 0.26, z1 - z0] });
+    out.push({ p: [(x0 + x1) / 2, y, z0 + 0.04], s: [x1 - x0, 0.26, 0.07] }, { p: [(x0 + x1) / 2, y, z1 - 0.04], s: [x1 - x0, 0.26, 0.07] });
     return out;
   };
   add([{ p: [0, 3.15, 0], s: [12, 0.3, 8] }], M.slab, { layer: 'structure', vol: 'G', n: none, system: 'cellular' });
-  add(joists(-6, 6, -4, 4, 3.15), M.timber, { layer: 'structure', vol: 'G', n: none, system: 'timber' });
+  add(joists(-6, 6, -4, 4, 3.15), M.timber, { layer: 'structure', vol: 'G', n: none, system: 'timber' }, 0.16);
   add([{ p: [-2, 6.25, -1], s: [8, 0.3, 6] }], M.slab, { layer: 'structure', vol: 'U', n: none, system: 'cellular' });
-  add(joists(-6, 2, -4, 2, 6.25), M.timber, { layer: 'structure', vol: 'U', n: none, system: 'timber' });
+  add(joists(-6, 2, -4, 2, 6.25), M.timber, { layer: 'structure', vol: 'U', n: none, system: 'timber' }, 0.16);
 
-  // roofs: the upper one oversails; with one floor the ground volume gets its own
+  // roofs: a thin oversailing plane with a dark metal edge; the terrace has a deck and a glass guard
+  const edge = (x: number, y: number, z: number, w: number, d: number): Box[] => [
+    { p: [x, y, z - d / 2], s: [w + 0.06, 0.16, 0.06] },
+    { p: [x, y, z + d / 2], s: [w + 0.06, 0.16, 0.06] },
+    { p: [x - w / 2, y, z], s: [0.06, 0.16, d + 0.06] },
+    { p: [x + w / 2, y, z], s: [0.06, 0.16, d + 0.06] },
+  ];
+  add([{ p: [-2, 6.5, -0.7], s: [9.5, 0.16, 7.7] }], M.roof, { layer: 'roof', vol: 'U', n: none, only: 2 });
+  add(edge(-2, 6.5, -0.7, 9.5, 7.7), M.coping, { layer: 'roof', vol: 'U', n: none, only: 2 });
+  const deck: Box[] = [];
+  for (let z = -3.84; z < 3.9; z += 0.22) deck.push({ p: [4, 3.34, z], s: [3.76, 0.05, 0.2] });
+  for (let z = 2.16; z < 3.9; z += 0.22) deck.push({ p: [-2, 3.34, z], s: [7.76, 0.05, 0.2] });
+  add(deck, M.oak, { layer: 'roof', vol: 'G', n: none, only: 2 }, 0.14);
   add(
     [
-      { p: [-2, 6.52, -0.6], s: [9.4, 0.22, 7.6] },
-      { p: [-2, 6.72, -4.3], s: [9.4, 0.2, 0.18] },
-      { p: [-6.6, 6.72, -0.6], s: [0.18, 0.2, 7.6] },
+      { p: [6.02, 3.86, 0], s: [0.025, 0.96, 8.1] },
+      { p: [0, 3.86, 4.02], s: [12.1, 0.96, 0.025] },
     ],
-    M.roof,
-    { layer: 'roof', vol: 'U', n: none, only: 2 },
-  );
-  add(
-    [
-      { p: [4, 3.36, 0], s: [4, 0.1, 8] },
-      { p: [-2, 3.36, 3], s: [8, 0.1, 2] },
-      { p: [6.06, 3.62, 0], s: [0.12, 0.5, 8.24] },
-      { p: [0, 3.62, 4.06], s: [12.24, 0.5, 0.12] },
-    ],
-    M.roof,
+    M.glass,
     { layer: 'roof', vol: 'G', n: none, only: 2 },
+    0,
+    false,
   );
-  add(
-    [
-      { p: [0, 3.42, 0.5], s: [13.4, 0.22, 9.6] },
-      { p: [0, 3.62, -4.3], s: [13.4, 0.2, 0.18] },
-    ],
-    M.roof,
-    { layer: 'roof', vol: 'G', n: none, only: 1 },
-  );
+  add(edge(0, 3.36, 0, 12.4, 8.4), M.coping, { layer: 'roof', vol: 'G', n: none, only: 2 });
+  add([{ p: [0, 3.4, 0.5], s: [13.5, 0.16, 9.7] }], M.roof, { layer: 'roof', vol: 'G', n: none, only: 1 });
+  add(edge(0, 3.4, 0.5, 13.5, 9.7), M.coping, { layer: 'roof', vol: 'G', n: none, only: 1 });
 
   // services: heating loops in the floor, risers, a duct, conduits round the rooms
   const loops = (x0: number, x1: number, z0: number, z1: number, y: number): Box[] => {
     const out: Box[] = [];
     let flip = false;
-    for (let x = x0; x <= x1; x += 0.45, flip = !flip) {
-      out.push({ p: [x, y, (z0 + z1) / 2], s: [0.05, 0.05, z1 - z0] });
-      if (x + 0.45 <= x1) out.push({ p: [x + 0.225, y, flip ? z0 : z1], s: [0.5, 0.05, 0.05] });
+    for (let x = x0; x <= x1; x += 0.4, flip = !flip) {
+      out.push({ p: [x, y, (z0 + z1) / 2], s: [0.045, 0.045, z1 - z0] });
+      if (x + 0.4 <= x1) out.push({ p: [x + 0.2, y, flip ? z0 : z1], s: [0.445, 0.045, 0.045] });
     }
     return out;
   };
-  add(loops(-5.3, 5.3, -3.3, 3.3, 0.05), M.copper, { layer: 'services', vol: 'G', n: none }, false);
-  add(loops(-5.3, 1.3, -3.3, 1.3, 3.36), M.copper, { layer: 'services', vol: 'U', n: none }, false);
+  add(loops(-5.3, 5.3, -3.3, 3.3, 0.05), M.copper, { layer: 'services', vol: 'G', n: none }, 0, false);
+  add(loops(-5.3, 1.3, -3.3, 1.3, 3.36), M.copper, { layer: 'services', vol: 'U', n: none }, 0, false);
   add(
     [
-      { p: [1.4, 1.5, -3.4], s: [0.09, 3, 0.09] },
-      { p: [1.65, 1.5, -3.4], s: [0.09, 3, 0.09] },
-      { p: [-1.6, 0.35, -3.4], s: [6, 0.09, 0.09] },
-      { p: [-4.6, 0.7, -3.4], s: [0.09, 0.8, 0.09] },
+      { p: [1.4, 1.5, -3.4], s: [0.08, 3, 0.08] },
+      { p: [1.62, 1.5, -3.4], s: [0.08, 3, 0.08] },
+      { p: [-1.6, 0.35, -3.4], s: [6, 0.08, 0.08] },
+      { p: [-4.6, 0.7, -3.4], s: [0.08, 0.8, 0.08] },
     ],
     M.water,
     { layer: 'services', vol: 'G', n: none },
+    0,
     false,
   );
   add(
     [
-      { p: [0, 2.72, -1.2], s: [10.4, 0.24, 0.42] },
-      { p: [3.2, 2.72, 1], s: [0.42, 0.24, 4.4] },
-      { p: [-3.4, 2.72, 1], s: [0.42, 0.24, 4.4] },
+      { p: [0, 2.72, -1.2], s: [10.4, 0.22, 0.4] },
+      { p: [3.2, 2.72, 1], s: [0.4, 0.22, 4.4] },
+      { p: [-3.4, 2.72, 1], s: [0.4, 0.22, 4.4] },
     ],
     M.duct,
     { layer: 'services', vol: 'G', n: none },
@@ -377,15 +421,25 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
   add(
     [
       { p: [-2, 5.88, -1], s: [6.6, 0.2, 0.36] },
-      { p: [1.52, 4.7, -3.4], s: [0.09, 2.8, 0.09] },
+      { p: [1.52, 4.7, -3.4], s: [0.08, 2.8, 0.08] },
     ],
     M.duct,
     { layer: 'services', vol: 'U', n: none },
   );
 
-  /* —— configurator extras —— */
-  const extra = (boxes: (Box & { m: THREE.Material })[], shadow = true) => {
-    const g = new THREE.Group();
+  /* —— the ground the model stands on —— */
+  // a contact shadow: the soft dark where the model meets its base, independent of the sun
+  const contact = new THREE.Mesh(new THREE.PlaneGeometry(34, 28), new THREE.MeshBasicMaterial({ map: tex.contact, transparent: true, depthWrite: false, opacity: layers ? 0.75 : 0.55, toneMapped: false }));
+  contact.rotation.x = -Math.PI / 2;
+  contact.position.y = 0.012;
+  const catcher = new THREE.Mesh(new THREE.CircleGeometry(60, 48), new THREE.ShadowMaterial({ opacity: layers ? 0.4 : 0.32 }));
+  catcher.rotation.x = -Math.PI / 2;
+  catcher.position.y = 0.01;
+  catcher.receiveShadow = true;
+  disposables.push(contact.geometry, contact.material as THREE.Material, catcher.geometry, catcher.material as THREE.Material);
+  scene.add(contact);
+
+  const solid = (g: THREE.Group, boxes: (Box & { m: THREE.Material })[], shadow = true) => {
     for (const b of boxes) {
       const mesh = new THREE.Mesh(unit, b.m);
       mesh.position.set(...b.p);
@@ -394,133 +448,212 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
       mesh.receiveShadow = true;
       g.add(mesh);
     }
-    g.visible = false;
-    scene.add(g);
     return g;
   };
-  const poolMat = new THREE.MeshStandardMaterial({ color: COLORS.pool, roughness: 0.15, metalness: 0.1 });
-  const panelMat = new THREE.MeshStandardMaterial({ color: 0x1d2a36, roughness: 0.3, metalness: 0.5 });
-  const extras = {
-    pool: extra(
-      [
-        { p: [-1.5, 0.04, 8.6], s: [9.4, 0.08, 4.4], m: M.skin },
-        { p: [-1.5, 0.09, 8.6], s: [8.4, 0.03, 3.4], m: poolMat },
-      ],
-      false,
-    ),
-    porch: extra([
-      { p: [8.3, 2.9, 1], s: [4.4, 0.14, 5.6], m: M.oak },
-      { p: [10.3, 1.45, 3.6], s: [0.16, 2.9, 0.16], m: M.frame },
-      { p: [10.3, 1.45, -1.6], s: [0.16, 2.9, 0.16], m: M.frame },
-      { p: [8.3, 0.04, 1], s: [4.6, 0.08, 5.8], m: M.skin },
-    ]),
-    garage: extra([
-      { p: [-9, 1.35, -1.2], s: [5.6, 2.7, 5.6], m: M.skin },
-      { p: [-9, 2.8, -1.2], s: [6, 0.2, 6], m: M.roof },
-      { p: [-9, 1.15, 1.63], s: [4.2, 2.3, 0.06], m: M.oak },
-    ]),
-    solar: extra(
-      Array.from({ length: 8 }, (_, i) => ({
-        p: [-4.4 + (i % 4) * 1.5, 6.74, -2.4 + Math.floor(i / 4) * 2.2] as [number, number, number],
-        s: [1.3, 0.06, 1.9] as [number, number, number],
-        m: panelMat,
-      })),
-    ),
+  const extraMat = (color: number, p: THREE.MeshStandardMaterialParameters = {}, tile = 0) => {
+    const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...p });
+    if (tile) worldUv(m, tile);
+    disposables.push(m);
+    return m;
   };
+
+  const extras = { pool: new THREE.Group(), porch: new THREE.Group(), garage: new THREE.Group(), solar: new THREE.Group(), wing: new THREE.Group() };
+  const roofGreen = extraMat(0x6f7f58, { roughness: 1, map: tex.fibre, bumpMap: tex.fibre, bumpScale: 2.5 }, 0.5);
+  const green: THREE.Mesh[] = [];
+
+  if (!layers) {
+    // the plot: a base like a presentation model's, lawn, a paved terrace, a path, trees
+    const baseM = extraMat(0x23211f, { roughness: 0.5, metalness: 0.1 });
+    const lawn = extraMat(0x8a8f7c, { roughness: 1, map: tex.fibre, bumpMap: tex.fibre, bumpScale: 2 }, 0.45);
+    const paving = extraMat(0xe6dccb, { roughness: 0.75, map: tex.stone, bumpMap: tex.grit, bumpScale: 0.4 }, 0.3);
+    solid(site, [
+      { p: [0, -0.62, 2], s: [38, 1, 30], m: baseM },
+      { p: [0, -0.07, 2], s: [37.4, 0.12, 29.4], m: lawn },
+      { p: [0, -0.02, 6.4], s: [16.5, 0.1, 5.4], m: paving },
+      { p: [9.3, -0.02, 12.2], s: [1.7, 0.1, 8.8], m: paving },
+    ]);
+    // trees as a model-maker makes them: a stem and a quiet crown
+    const stem = new THREE.CylinderGeometry(0.07, 0.1, 1, 8);
+    const crown = new THREE.SphereGeometry(1, 28, 20);
+    const leaf = extraMat(0x8d927f, { roughness: 1, bumpMap: tex.grit, bumpScale: 1.5 });
+    const bark = extraMat(0x4b4138, { roughness: 0.9 });
+    disposables.push(stem, crown);
+    for (const [x, z, h, r] of [[-14.5, 9.5, 3.8, 1.9], [-16, -5, 4.8, 2.4], [15, -7.5, 4.2, 2.1], [16, 7, 3.2, 1.6], [-10.5, -10, 3.4, 1.7]] as const) {
+      const t = new THREE.Mesh(stem, bark);
+      t.scale.set(1, h, 1);
+      t.position.set(x, h / 2, z);
+      const c = new THREE.Mesh(crown, leaf);
+      c.scale.set(r, r * 0.86, r);
+      c.position.set(x, h + r * 0.55, z);
+      c.rotation.y = x;
+      t.castShadow = c.castShadow = true;
+      site.add(t, c);
+    }
+    catcher.position.y = 0.045;
+    contact.position.y = 0.05;
+
+    const poolWater = extraMat(0x2f8f8a, { roughness: 0.04, metalness: 0, envMapIntensity: 2, transparent: true, opacity: 0.92 });
+    const dark = extraMat(0x1a1f24, { roughness: 0.25, metalness: 0.7, envMapIntensity: 1.6 });
+    solid(extras.pool, [
+      { p: [-2.4, 0.06, 11.6], s: [10.6, 0.14, 4.6], m: paving },
+      { p: [-2.4, 0.1, 11.6], s: [9.4, 0.1, 3.4], m: poolWater },
+    ], false);
+    // pergola: posts, beams and a run of slats
+    const slats: (Box & { m: THREE.Material })[] = [];
+    for (let x = 6.5; x < 10.6; x += 0.32) slats.push({ p: [x, 2.98, 1], s: [0.07, 0.12, 5.6], m: M.oak });
+    solid(extras.porch, [
+      { p: [8.5, 2.86, 3.75], s: [4.4, 0.16, 0.12], m: M.frame },
+      { p: [8.5, 2.86, -1.75], s: [4.4, 0.16, 0.12], m: M.frame },
+      { p: [10.6, 1.45, 3.75], s: [0.12, 2.9, 0.12], m: M.frame },
+      { p: [10.6, 1.45, -1.75], s: [0.12, 2.9, 0.12], m: M.frame },
+      { p: [8.5, 0.04, 1], s: [4.7, 0.1, 6], m: paving },
+      ...slats,
+    ]);
+    solid(extras.garage, [
+      { p: [-9.4, 1.35, -1.2], s: [5.6, 2.7, 5.6], m: M.skin },
+      { p: [-9.4, 2.78, -1.2], s: [6, 0.16, 6], m: M.roof },
+      { p: [-9.4, 1.15, 1.63], s: [4.2, 2.3, 0.06], m: M.frame },
+      { p: [-9.4, 0.02, 5.4], s: [4.4, 0.1, 7.4], m: paving },
+    ]);
+    solid(
+      extras.solar,
+      Array.from({ length: 8 }, (_, i) => ({ p: [-4.4 + (i % 4) * 1.5, 6.66, -2.4 + Math.floor(i / 4) * 2.2] as [number, number, number], s: [1.3, 0.05, 1.9] as [number, number, number], m: dark })),
+    );
+    // the wing of an L-shaped house: one storey, glazed to the garden
+    solid(extras.wing, [
+      { p: [3.2, 1.5, -7.6], s: [5.6, 3, 7.2], m: M.skin },
+      { p: [3.2, 3.1, -7.6], s: [6.2, 0.16, 7.8], m: M.roof },
+      { p: [6.02, 1.45, -7.6], s: [0.05, 2.5, 5.2], m: M.glass },
+      { p: [6.04, 1.45, -5.9], s: [0.07, 2.5, 0.06], m: M.frame },
+      { p: [6.04, 1.45, -7.6], s: [0.07, 2.5, 0.06], m: M.frame },
+      { p: [6.04, 1.45, -9.3], s: [0.07, 2.5, 0.06], m: M.frame },
+    ]);
+    for (const g of Object.values(extras)) {
+      g.visible = false;
+      root.add(g);
+    }
+    // planted roofs: a second skin over each roof plane, shown when chosen
+    for (const [p, s, only] of [[[-2, 6.6, -0.7], [9.2, 0.05, 7.4], 2], [[0, 3.5, 0.5], [13.2, 0.05, 9.4], 1]] as const) {
+      const m = new THREE.Mesh(unit, roofGreen);
+      m.position.set(p[0], p[1], p[2]);
+      m.scale.set(s[0], s[1], s[2]);
+      m.receiveShadow = true;
+      m.userData.only = only;
+      m.visible = false;
+      root.add(m);
+      green.push(m);
+    }
+  }
+  scene.add(catcher);
 
   /* —— state: every value eases towards its target; the scene renders only while one is moving —— */
   const cfg: HouseConfig = { ...DEFAULT_CONFIG };
-  const st = { t: 0, tT: 0, turn: 0, turnT: 0, focus: null as LayerId | null, dim: new Map<string, number>(), sys: 0, sysT: 0, floors: 1, floorsT: 1, width: 1, widthT: 1, wood: 0, woodT: 0 };
-  let auto = false;
-  let autoAngle = 0;
+  const st = { t: 0, tT: 0, turn: 0, turnT: 0, focus: null as LayerId | null, dim: new Map<string, number>(), sys: 0, sysT: 0, floors: 1, floorsT: 1, width: 1, widthT: 1, wood: 0, woodT: 0, wide: 0, wideT: 0 };
   let active = false;
   let raf = 0;
   let last = 0;
   let dirty = true;
-  const ink = new THREE.Color(COLORS.dim);
-  const skinA = new THREE.Color(COLORS.skin);
-  const skinB = new THREE.Color(COLORS.skinWood);
+  // 0 full · 1 lower resolution · 2 lower still, no sun shadows (the contact shadow stays)
+  let quality = 0;
+  let slowFrames = 0;
+  const fixed = /[?&]house3d=hq/.test(location.search); // for screenshots on machines without a GPU
+  let shadowKey = '';
+  const ink = new THREE.Color(0x394141);
+  const stone = new THREE.Color(0xf1e7d6);
+  const wood = new THREE.Color(0xb98a58);
 
   const apply = () => {
     const t = st.t;
-    // which way each layer leaves, and when
+    // which way each layer leaves, and when: outermost first
     const f = ss(0.04, 0.3, t);
     const r = ss(0.14, 0.42, t);
     const ins = ss(0.3, 0.56, t);
-    const env = ss(0.42, 0.68, t);
-    const lift = ss(0.2, 0.72, t) * 2.7 * st.floors;
+    const env2 = ss(0.42, 0.68, t);
+    const lift = ss(0.2, 0.72, t) * 2.9 * st.floors;
     const fnd = ss(0.72, 0.97, t);
-    const out: Record<LayerId, number> = { finishes: f * 3.3, insulation: ins * 2.2, envelope: env * 1.15, structure: 0, services: 0, roof: 0, foundation: 0 };
+    const out: Record<LayerId, number> = { finishes: f * 3.6, insulation: ins * 2.4, envelope: env2 * 1.25, structure: 0, services: 0, roof: 0, foundation: 0 };
     for (const p of parts) {
-      const up = p.vol === 'U' ? lift : 0;
-      let y = up;
-      if (p.layer === 'roof') y += r * (p.vol === 'U' ? 2.6 : p.only === 1 ? 2.6 : 1);
-      if (p.layer === 'foundation') y -= fnd * 1.7;
+      let y = p.vol === 'U' ? lift : 0;
+      if (p.layer === 'roof') y += r * (p.vol === 'U' ? 2.9 : p.only === 1 ? 2.9 : 1.1);
+      if (p.layer === 'foundation') y -= fnd * 1.8;
       const k = out[p.layer];
-      p.mesh.position.set(p.n[0] * k, y, p.n[1] * k);
-      // system and number of floors: parts scale in and out rather than pop
       let vis = 1;
-      if (p.system) vis *= p.system === 'cellular' ? 1 - st.sys : st.sys;
-      if (p.vol === 'U') vis *= st.floors;
-      if (p.only === 2) vis *= st.floors;
+      if (p.vol === 'U' || p.only === 2) vis *= st.floors;
       if (p.only === 1) vis *= 1 - st.floors;
-      p.mesh.visible = vis > 0.02;
-      if (p.system) p.mesh.scale.setScalar(0.94 + 0.06 * vis);
-    }
-    ground.position.y = -1.06 - fnd * 1.7;
-    for (const [key, { m, base, layer }] of mats) {
-      const d = st.dim.get(key) ?? 0;
-      const target = st.focus && st.focus !== layer ? 1 : 0;
-      const next = d + (target - d) * 0.16;
-      st.dim.set(key, Math.abs(next - target) < 0.004 ? target : next);
-      if (key === 'skin') base.copy(skinA).lerp(skinB, st.wood);
-      // the layers that are not the subject step back to a ghost of themselves
-      const g = st.dim.get(key) ?? 0;
-      m.color.copy(base).lerp(ink, g * 0.35);
-      const see = key === 'glass' || g > 0.01;
-      if (m.transparent !== see) {
-        m.transparent = see;
-        m.needsUpdate = true;
+      // the structure of the chosen system is raised from the floor up; the other one is let go
+      let grow = 1;
+      if (p.system) {
+        const mine = p.system === 'timber' ? st.sys : 1 - st.sys;
+        grow = ss(0.25, 1, mine);
+        vis *= mine;
       }
-      m.opacity = (key === 'glass' ? 0.3 : 1) * (1 - g * 0.88);
-      m.depthWrite = g < 0.5 && key !== 'glass';
+      p.mesh.visible = vis > 0.015;
+      p.mesh.scale.y = Math.max(grow, 0.001);
+      p.mesh.position.set(p.n[0] * k, y + p.y0 * (1 - grow), p.n[1] * k);
     }
+    const drop = fnd * 1.8;
+    contact.position.y = (layers ? 0.012 : 0.05) - drop - (layers ? 1.05 : 0);
+    catcher.position.y = (layers ? 0.01 : 0.045) - drop - (layers ? 1.05 : 0);
+    (contact.material as THREE.MeshBasicMaterial).opacity = (layers ? 0.75 : 0.55) * (1 - 0.45 * ss(0.05, 0.6, t));
+
+    for (const [key, x] of mats) {
+      const d = st.dim.get(key) ?? 0;
+      const target = st.focus && st.focus !== x.layer ? 1 : 0;
+      const next = d + (target - d) * 0.14;
+      const g = Math.abs(next - target) < 0.004 ? target : next;
+      st.dim.set(key, g);
+      if (key === 'skinU') x.base.copy(stone).lerp(wood, st.wood);
+      // the layers that are not the subject step back to a ghost of themselves
+      const sysA = x.system ? ss(0, 0.75, x.system === 'timber' ? st.sys : 1 - st.sys) : 1;
+      const alpha = x.alpha * (1 - g * 0.9) * sysA;
+      const see = alpha < 0.995;
+      if (x.m.transparent !== see) {
+        x.m.transparent = see;
+        x.m.needsUpdate = true;
+      }
+      x.m.color.copy(base(x.base, g));
+      x.m.opacity = alpha;
+      x.m.depthWrite = alpha > 0.5;
+    }
+    M.skinU.map = st.wood > 0.5 ? tex.grain : tex.stone;
+
     root.scale.x = st.width;
-    // camera: a slow walk round the house as it comes apart
-    const a = THREE.MathUtils.degToRad(opts.mode === 'layers' ? 36 + 34 * t : 32) + st.turn + autoAngle;
-    const el = THREE.MathUtils.degToRad(opts.mode === 'layers' ? 15 + 5 * t : 14);
-    const narrow = camera.aspect < 1 ? 1.55 : 1;
-    const dist = (opts.mode === 'layers' ? 42 + 19 * t : 36 + (cfg.pool || cfg.garage || cfg.porch ? 11 : 0)) * narrow;
-    const cy = opts.mode === 'layers' ? 2.8 + 2.2 * t : 2.2 + st.floors * 0.7;
-    camera.position.set(Math.sin(a) * Math.cos(el) * dist, cy + Math.sin(el) * dist, Math.cos(a) * Math.cos(el) * dist);
-    camera.lookAt(-0.4, cy, 0);
+    // camera: a slow walk round the model, drawing back as it opens
+    const narrow = camera.aspect < 1 ? 1.5 : 1;
+    const a = THREE.MathUtils.degToRad(layers ? 38 + 30 * t : 34) + st.turn;
+    const el = THREE.MathUtils.degToRad(layers ? 13 + 6 * t : 17 - 2 * st.wide);
+    const dist = (layers ? 56 + 27 * t : 62 + 6 * st.wide) * narrow;
+    const cy = layers ? 2.9 + 2.3 * t : 2 + st.floors * 0.6;
+    const cx = layers ? -0.4 : -0.6;
+    const cz = layers ? 0 : 1.6;
+    camera.position.set(cx + Math.sin(a) * Math.cos(el) * dist, cy + Math.sin(el) * dist, cz + Math.cos(a) * Math.cos(el) * dist);
+    camera.lookAt(cx, cy, cz);
   };
+  const tmp = new THREE.Color();
+  const base = (c: THREE.Color, g: number) => tmp.copy(c).lerp(ink, g * 0.4);
 
   const settle = (dt: number) => {
-    const k = 1 - Math.exp(-dt * 9);
+    const k = 1 - Math.exp(-dt * 7.5);
     let moving = false;
-    const ease = (v: 't' | 'turn' | 'sys' | 'floors' | 'width' | 'wood', tv: 'tT' | 'turnT' | 'sysT' | 'floorsT' | 'widthT' | 'woodT', eps: number) => {
+    const ease = (v: 't' | 'turn' | 'sys' | 'floors' | 'width' | 'wood' | 'wide', tv: 'tT' | 'turnT' | 'sysT' | 'floorsT' | 'widthT' | 'woodT' | 'wideT', eps: number, rate = 1) => {
       const d = st[tv] - st[v];
       if (d === 0) return;
       if (Math.abs(d) < eps) st[v] = st[tv];
       else {
-        st[v] += d * k;
+        st[v] += d * Math.min(1, k * rate);
         moving = true;
       }
     };
-    ease('t', 'tT', 0.0005);
-    ease('turn', 'turnT', 0.0005);
-    ease('sys', 'sysT', 0.004);
-    ease('floors', 'floorsT', 0.004);
+    ease('t', 'tT', 0.0005, 1.3);
+    ease('turn', 'turnT', 0.0005, 1.2);
+    ease('sys', 'sysT', 0.003, 0.55);
+    ease('floors', 'floorsT', 0.003, 0.8);
     ease('width', 'widthT', 0.002);
-    ease('wood', 'woodT', 0.004);
-    for (const [key, { layer }] of mats) {
-      const target = st.focus && st.focus !== layer ? 1 : 0;
+    ease('wood', 'woodT', 0.004, 0.8);
+    ease('wide', 'wideT', 0.003, 0.6);
+    for (const [key, x] of mats) {
+      const target = st.focus && st.focus !== x.layer ? 1 : 0;
       if ((st.dim.get(key) ?? 0) !== target) moving = true;
-    }
-    if (auto) {
-      autoAngle += dt * 0.1;
-      moving = true;
     }
     return moving;
   };
@@ -530,11 +663,30 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
     const dt = Math.min((now - last) / 1000 || 0.016, 0.05);
     last = now;
     const moving = settle(dt);
-    if (moving || dirty) {
+    if ((moving || dirty) && compiled) {
       dirty = false;
       apply();
+      // the shadow map only needs redrawing when something other than the camera has moved
+      const key = `${st.t.toFixed(4)}|${st.sys.toFixed(3)}|${st.floors.toFixed(3)}|${st.width.toFixed(3)}|${cfg.pool}${cfg.porch}${cfg.garage}${cfg.solar}${cfg.volume}`;
+      if (key !== shadowKey) {
+        shadowKey = key;
+        renderer.shadowMap.needsUpdate = true;
+      }
       renderer.render(scene, camera);
-      opts.onFrame?.();
+      // too slow for this machine? give up pixels, then shadows, before giving up smoothness
+      if (moving && !fixed && quality < 2) {
+        slowFrames = dt > 0.03 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
+        if (slowFrames > 10) {
+          slowFrames = 0;
+          quality++;
+          if (quality === 2) {
+            sun.castShadow = false;
+            catcher.visible = false;
+            (contact.material as THREE.MeshBasicMaterial).opacity *= 1.25;
+          }
+          resize();
+        }
+      }
     }
     if (active && (moving || dirty)) raf = requestAnimationFrame(frame);
   };
@@ -546,17 +698,26 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
     }
   };
 
+  // shaders are compiled off the main thread where the browser can; nothing is drawn until they are
+  let compiled = false;
+  const ready = () => {
+    compiled = true;
+    wake();
+  };
+
   const resize = () => {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (!w || !h) return;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality === 0 ? (small ? 1.75 : 2) : quality === 1 ? 1.25 : 1));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     wake();
   };
   resize();
+  apply();
+  renderer.compileAsync(scene, camera).then(ready, ready);
 
   return {
     setProgress(t) {
@@ -577,14 +738,13 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
       extras.porch.visible = cfg.porch;
       extras.garage.visible = cfg.garage;
       extras.solar.visible = cfg.solar && cfg.floors === 2;
+      extras.wing.visible = cfg.volume === 'L';
+      for (const g of green) g.visible = cfg.roof === 'green' && (g.userData.only === 2) === (cfg.floors === 2);
+      st.wideT = cfg.pool || cfg.garage || cfg.porch || cfg.volume === 'L' ? 1 : 0;
       wake();
     },
     setTurn(a) {
       st.turnT = a;
-      wake();
-    },
-    setAutoRotate(on) {
-      auto = on;
       wake();
     },
     resize,
@@ -599,12 +759,7 @@ export function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 'layer
     dispose() {
       active = false;
       cancelAnimationFrame(raf);
-      unit.dispose();
-      for (const { m } of mats.values()) m.dispose();
-      poolMat.dispose();
-      panelMat.dispose();
-      (ground.material as THREE.Material).dispose();
-      ground.geometry.dispose();
+      for (const d of disposables) d.dispose();
       renderer.dispose();
     },
   };

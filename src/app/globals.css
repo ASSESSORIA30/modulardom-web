@@ -5,20 +5,21 @@
 
 /*
   ModularDom — V3.
-  Palette taken from the house at dusk: travertine, lime plaster, oak, the pool, the hour after sunset.
+  Palette: ModularDom's own navy, cream and gold (as on modulardom.com), with the travertine and
+  oak of the house in the film.
   Type: Fraunces, light, at its display optical size (an old-style with a true italic, for the
   sentences that carry feeling) + Instrument Sans for everything that informs.
 */
 @theme {
-  --color-paper: #f4f0e8;
+  --color-paper: #f2eee5;
   --color-stone: #e3dacb;
   --color-stone-deep: #c8baa3;
   --color-oak: #8f5f38;
   --color-oak-deep: #6b4324;
-  --color-water: #2c7873;
-  --color-water-light: #9ad6cd;
-  --color-ink: #141a1a;
-  --color-ink-soft: #222b2a;
+  --color-gold: #c9a84c;
+  --color-gold-light: #e2c675;
+  --color-ink: #0d1520;
+  --color-ink-soft: #17263a;
   /* MINERAL: its own, cooler register */
   --color-mineral: #d9dad6;
   --color-mineral-deep: #a9aca8;
@@ -82,8 +83,8 @@ body {
   padding-bottom: var(--dock-h);
 }
 ::selection {
-  background: var(--color-water);
-  color: var(--color-paper);
+  background: var(--color-gold);
+  color: var(--color-ink);
 }
 :focus-visible {
   outline: 2px solid currentColor;
@@ -207,15 +208,15 @@ a {
     --btn-bg: var(--color-paper);
     --btn-fg: var(--color-ink);
     --btn-line: var(--color-paper);
-    --btn-fill: var(--color-water-light);
+    --btn-fill: var(--color-gold-light);
     --btn-fg-hover: var(--color-ink);
   }
   .btn-ink {
     --btn-bg: var(--color-ink);
     --btn-fg: var(--color-paper);
     --btn-line: var(--color-ink);
-    --btn-fill: var(--color-water);
-    --btn-fg-hover: var(--color-paper);
+    --btn-fill: var(--color-gold);
+    --btn-fg-hover: var(--color-ink);
   }
   .btn-line {
     --btn-line: color-mix(in srgb, currentColor 45%, transparent);
@@ -368,7 +369,7 @@ a {
   isolation: isolate;
   max-width: min(100%, 48rem);
   pointer-events: auto;
-  text-shadow: 0 1px 20px rgb(11 15 15 / 0.4);
+  text-shadow: 0 1px 20px rgb(8 13 20 / 0.4);
 }
 .station-copy .btn {
   text-shadow: none;
@@ -379,7 +380,7 @@ a {
   position: absolute;
   inset: -4.5rem -7rem -5rem;
   z-index: -1;
-  background: radial-gradient(closest-side, rgb(11 15 15 / 0.74), rgb(11 15 15 / 0.46) 52%, transparent);
+  background: radial-gradient(closest-side, rgb(8 13 20 / 0.74), rgb(8 13 20 / 0.46) 52%, transparent);
   pointer-events: none;
 }
 .station[data-place='bottom-left'],
@@ -492,7 +493,7 @@ a {
     bottom: auto;
     font-size: 0.8125rem;
     opacity: 0.7;
-    text-shadow: 0 1px 12px rgb(11 15 15 / 0.6);
+    text-shadow: 0 1px 12px rgb(8 13 20 / 0.6);
     transition:
       opacity 400ms var(--ease-out),
       transform 500ms var(--ease-out);

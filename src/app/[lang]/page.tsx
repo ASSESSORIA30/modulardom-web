@@ -13,7 +13,8 @@ export default async function Home({ params }: { params: Promise<{ lang: string 
   const dict = dictionaries[lang];
   return (
     <>
-      <main id="contingut">
+      {/* the page is a sheet that lifts off the footer waiting underneath */}
+      <main id="contingut" className="relative z-10 bg-ink shadow-[0_24px_60px_rgb(0_0_0/0.45)]">
         <Tour dict={dict} lang={lang} />
         <Gallery dict={dict} lang={lang} />
         <Systems dict={dict} />

@@ -22,7 +22,7 @@ export default async function Page({ params }: Params) {
   const item = NAV.find((n) => n.slug === slug)!;
   return (
     <>
-      <main id="contingut" className="bg-paper text-ink" data-theme="light">
+      <main id="contingut" className="relative z-10 bg-paper text-ink" data-theme="light">
         <div className="wrap flex min-h-svh flex-col justify-end pb-20 pt-40">
           <p className="t-note mb-5 text-oak">{dict.nav[item.key]}</p>
           <h1 className="t-title max-w-[18ch]">{dict.ui.soonTitle}</h1>

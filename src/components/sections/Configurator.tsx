@@ -1,23 +1,49 @@
 'use client';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HouseCanvas } from '@/components/house3d/HouseCanvas';
 import type { HouseConfig, HouseScene } from '@/components/house3d/scene';
 import { Lines } from '@/components/ui/Lines';
 import { Reveal } from '@/components/ui/Reveal';
 import type { Dictionary, Locale } from '@/content/i18n';
+import { calculate, validateInput, type EngineInput, type Quote, type Tariff } from '@/lib/configurator/engine';
+import { loadTariff } from '@/lib/configurator/tariff';
 
 /*
-  The configurator, as a first sketch of the house: seven decisions on the right, the model on the
-  left answering each one (footprint, floors, structure, finish, extras). Drag the model to turn it.
+  The configurator: the model on the left, the decisions on the right, each one changing the model.
 
-  No prices and no formulas: ModularDom's current site has no calculator to carry over, and none
-  is invented here. The choices travel to /configurador in the link, ready for the real one.
+  Its questions are the ones ModularDom's own configurator asks today (surface, bedrooms,
+  bathrooms, suite, kitchen, garage, climate, extras), so the answers map one to one onto the
+  company's budget engine (src/lib/configurator/engine.ts). Three more (system, façade, roof) and
+  the massing only change the model and are settled in the project.
+
+  No price is shown: the tariff lives in ModularDom's CRM and none is shipped here. When one is
+  supplied (PRICING in src/content/site.ts) the breakdown appears under the decisions.
 */
 
-const SURFACE = { min: 80, max: 400, step: 10, initial: 180 };
+const SURFACE = { min: 100, max: 400, step: 10, initial: 180 };
+const CLIMATE = ['aerotermia', 'aireConductos'];
+const EXTRAS = ['piscina', 'porche', 'placasSolares']; // + safareig, which the engine counts with the interior
 
-type State = { surface: number; floors: number; bedrooms: number; system: number; style: number; finishes: number; extras: boolean[] };
+type State = {
+  surface: number; floors: number; volume: number;
+  bedrooms: number; bathrooms: number; suite: number; kitchen: number;
+  vehicles: number; climate: boolean[]; extras: boolean[];
+  system: number; facade: number; roof: number;
+};
+const INITIAL: State = { surface: SURFACE.initial, floors: 1, volume: 0, bedrooms: 3, bathrooms: 2, suite: 1, kitchen: 1, vehicles: 0, climate: [true, false], extras: [false, false, false, false], system: 0, facade: 0, roof: 0 };
+
+const chip = (on: boolean) =>
+  `min-h-11 border px-4 text-[0.9375rem] font-medium transition-[background-color,color,border-color,transform] duration-200 active:scale-[0.97] ${on ? 'border-paper bg-paper text-ink' : 'border-paper/30 hover:border-paper'}`;
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2 py-3 sm:grid-cols-[8.5rem_1fr] sm:items-center">
+      <span className="text-[0.9375rem] text-paper/75">{label}</span>
+      {children}
+    </div>
+  );
+}
 
 function Options({ label, options, value, onChange }: { label: string; options: string[]; value: number; onChange: (i: number) => void }) {
   const row = useRef<HTMLDivElement>(null);
@@ -32,18 +58,38 @@ function Options({ label, options, value, onChange }: { label: string; options: 
   return (
     <div ref={row} role="radiogroup" aria-label={label} onKeyDown={key} className="flex flex-wrap gap-2">
       {options.map((o, i) => (
-        <button
-          key={o}
-          type="button"
-          role="radio"
-          aria-checked={i === value}
-          tabIndex={i === value ? 0 : -1}
-          onClick={() => onChange(i)}
-          className={`min-h-11 border px-4 text-[0.9375rem] font-medium transition-[background-color,color,border-color,transform] duration-200 active:scale-[0.97] ${i === value ? 'border-paper bg-paper text-ink' : 'border-paper/30 hover:border-paper'}`}
-        >
+        <button key={o} type="button" role="radio" aria-checked={i === value} tabIndex={i === value ? 0 : -1} onClick={() => onChange(i)} className={chip(i === value)}>
           {o}
         </button>
       ))}
+    </div>
+  );
+}
+
+function Toggles({ label, options, value, onChange }: { label: string; options: string[]; value: boolean[]; onChange: (v: boolean[]) => void }) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((o, i) => (
+        <button key={o} type="button" aria-pressed={value[i]} onClick={() => onChange(value.map((v, k) => (k === i ? !v : v)))} className={chip(value[i])}>
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Stepper({ label, value, min, max, zero, onChange }: { label: string; value: number; min: number; max: number; zero?: string; onChange: (n: number) => void }) {
+  return (
+    <div role="group" aria-label={label} className="flex w-fit items-stretch border border-paper/30">
+      <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} aria-label={`${label} −1`} className="min-h-11 w-12 text-xl transition-[transform,opacity] duration-150 active:scale-90 disabled:opacity-30">
+        −
+      </button>
+      <output className="t-num flex min-w-16 items-center justify-center border-x border-paper/30 px-3 text-[1.0625rem] font-medium" aria-live="polite">
+        {value === 0 && zero ? zero : value}
+      </output>
+      <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label={`${label} +1`} className="min-h-11 w-12 text-xl transition-[transform,opacity] duration-150 active:scale-90 disabled:opacity-30">
+        +
+      </button>
     </div>
   );
 }
@@ -52,36 +98,58 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
   const c = dict.configurator;
   const scene = useRef<HouseScene | null>(null);
   const [open, setOpen] = useState(0);
-  const [s, setS] = useState<State>({ surface: SURFACE.initial, floors: 1, bedrooms: 1, system: 0, style: 0, finishes: 0, extras: [false, false, false, false, false] });
+  const [s, setS] = useState<State>(INITIAL);
+  const [tariff, setTariff] = useState<Tariff | null>(null);
   const set = (patch: Partial<State>) => setS((v) => ({ ...v, ...patch }));
 
-  const toScene = useCallback(
+  useEffect(() => {
+    loadTariff().then(setTariff);
+  }, []);
+
+  // the same answers, three ways: for the model, for the budget engine, for the link
+  const model = useMemo(
     (): Partial<HouseConfig> => ({
       floors: s.floors === 0 ? 1 : 2,
       width: 0.8 + ((s.surface - SURFACE.min) / (SURFACE.max - SURFACE.min)) * 0.55,
       system: s.system === 1 ? 'timber' : 'cellular',
-      finish: s.finishes === 1 ? 'wood' : 'mineral',
-      pool: s.extras[0],
-      porch: s.extras[1],
-      garage: s.extras[2],
-      solar: s.extras[4],
+      finish: s.facade === 1 ? 'wood' : 'mineral',
+      volume: s.volume === 1 ? 'L' : 'compact',
+      roof: s.roof === 1 ? 'green' : 'flat',
+      pool: s.extras[1],
+      porch: s.extras[2],
+      solar: s.extras[3],
+      garage: s.vehicles > 0,
     }),
     [s],
   );
+  const input = useMemo(
+    (): EngineInput => ({
+      metres: s.surface,
+      habitacions: s.bedrooms,
+      banys: s.bathrooms,
+      suite: (['sin', 'bano', 'bano_vestidor'] as const)[s.suite],
+      cuina: s.kitchen === 1 ? 'isla' : 'basica',
+      vehicles: s.vehicles,
+      safareig: s.extras[0],
+      installacions: CLIMATE.filter((_, i) => s.climate[i]),
+      extres: EXTRAS.filter((_, i) => s.extras[i + 1]),
+    }),
+    [s],
+  );
+  const quote: Quote | null = useMemo(() => (tariff && validateInput(tariff, input).length === 0 ? calculate(tariff, input) : null), [tariff, input]);
+
   useEffect(() => {
-    scene.current?.setConfig(toScene());
-  }, [toScene]);
+    scene.current?.setConfig(model);
+  }, [model]);
 
   // drag to turn the model; it keeps the angle you leave it at
   const turn = useRef({ at: 0, start: 0, base: 0, down: false });
-  const onReady = useCallback(
-    (sc: HouseScene) => {
-      scene.current = sc;
-      sc.setConfig(toScene());
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  const latest = useRef(model);
+  latest.current = model;
+  const onReady = useCallback((sc: HouseScene) => {
+    scene.current = sc;
+    sc.setConfig(latest.current);
+  }, []);
   const drag = {
     onPointerDown: (e: React.PointerEvent) => {
       turn.current = { ...turn.current, down: true, start: e.clientX, base: turn.current.at };
@@ -96,75 +164,122 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
     onPointerCancel: () => (turn.current.down = false),
   };
 
-  const extras = c.extras.options.filter((_, i) => s.extras[i]);
-  const rows: { label: string; value: string; body: React.ReactNode }[] = [
+  const picked = (opts: string[], on: boolean[]) => opts.filter((_, i) => on[i]);
+  const groups: { label: string; value: string; body: React.ReactNode }[] = [
     {
-      label: c.surface.label,
-      value: `${s.surface} ${c.surface.unit}`,
+      label: c.groups.house,
+      value: `${s.surface} ${c.surface.unit} · ${c.floors.options[s.floors]}`,
       body: (
-        <label className="block">
-          <span className="sr-only">{c.surface.label}</span>
-          <input
-            type="range"
-            min={SURFACE.min}
-            max={SURFACE.max}
-            step={SURFACE.step}
-            value={s.surface}
-            onChange={(e) => set({ surface: +e.target.value })}
-            aria-valuetext={`${s.surface} ${c.surface.unit}`}
-            className="range w-full"
-            style={{ '--fill': `${((s.surface - SURFACE.min) / (SURFACE.max - SURFACE.min)) * 100}%` } as React.CSSProperties}
-          />
-          <span className="t-note mt-2 block text-paper/70">{c.surface.hint}</span>
-        </label>
+        <>
+          <Field label={c.surface.label}>
+            <label className="block">
+              <span className="flex items-baseline justify-between">
+                <span className="t-serif t-num text-[1.6rem] leading-none">
+                  {s.surface} <span className="font-sans text-[0.9375rem]">{c.surface.unit}</span>
+                </span>
+                <span className="t-note text-paper/70">{c.surface.hint}</span>
+              </span>
+              <input
+                type="range"
+                min={SURFACE.min}
+                max={SURFACE.max}
+                step={SURFACE.step}
+                value={s.surface}
+                onChange={(e) => set({ surface: +e.target.value })}
+                aria-label={c.surface.label}
+                aria-valuetext={`${s.surface} ${c.surface.unit}`}
+                className="range w-full"
+                style={{ '--fill': `${((s.surface - SURFACE.min) / (SURFACE.max - SURFACE.min)) * 100}%` } as React.CSSProperties}
+              />
+            </label>
+          </Field>
+          <Field label={c.floors.label}>
+            <Options {...c.floors} value={s.floors} onChange={(i) => set({ floors: i })} />
+          </Field>
+          <Field label={c.volume.label}>
+            <Options {...c.volume} value={s.volume} onChange={(i) => set({ volume: i })} />
+          </Field>
+        </>
       ),
     },
-    { label: c.floors.label, value: c.floors.options[s.floors], body: <Options {...c.floors} value={s.floors} onChange={(i) => set({ floors: i })} /> },
-    { label: c.bedrooms.label, value: c.bedrooms.options[s.bedrooms], body: <Options {...c.bedrooms} value={s.bedrooms} onChange={(i) => set({ bedrooms: i })} /> },
-    { label: c.system.label, value: c.system.options[s.system], body: <Options {...c.system} value={s.system} onChange={(i) => set({ system: i })} /> },
-    { label: c.style.label, value: c.style.options[s.style], body: <Options {...c.style} value={s.style} onChange={(i) => set({ style: i })} /> },
-    { label: c.finishes.label, value: c.finishes.options[s.finishes], body: <Options {...c.finishes} value={s.finishes} onChange={(i) => set({ finishes: i })} /> },
     {
-      label: c.extras.label,
-      value: extras.length ? extras.join(', ') : c.none,
+      label: c.groups.interior,
+      value: `${s.bedrooms} ${c.bedrooms.toLowerCase()} · ${s.bathrooms} ${c.bathrooms.toLowerCase()}`,
       body: (
-        <div>
-          <div className="flex flex-wrap gap-2">
-            {c.extras.options.map((o, i) => (
-              <button
-                key={o}
-                type="button"
-                aria-pressed={s.extras[i]}
-                onClick={() => set({ extras: s.extras.map((v, k) => (k === i ? !v : v)) })}
-                className={`min-h-11 border px-4 text-[0.9375rem] font-medium transition-[background-color,color,border-color,transform] duration-200 active:scale-[0.97] ${s.extras[i] ? 'border-paper bg-paper text-ink' : 'border-paper/30 hover:border-paper'}`}
-              >
-                {o}
-              </button>
-            ))}
-          </div>
-          <span className="t-note mt-2 block text-paper/70">{c.extras.hint}</span>
-        </div>
+        <>
+          <Field label={c.bedrooms}>
+            <Stepper label={c.bedrooms} value={s.bedrooms} min={1} max={6} onChange={(n) => set({ bedrooms: n })} />
+          </Field>
+          <Field label={c.bathrooms}>
+            <Stepper label={c.bathrooms} value={s.bathrooms} min={1} max={4} onChange={(n) => set({ bathrooms: n })} />
+          </Field>
+          <Field label={c.suite.label}>
+            <Options {...c.suite} value={s.suite} onChange={(i) => set({ suite: i })} />
+          </Field>
+          <Field label={c.kitchen.label}>
+            <Options {...c.kitchen} value={s.kitchen} onChange={(i) => set({ kitchen: i })} />
+          </Field>
+        </>
+      ),
+    },
+    {
+      label: c.groups.equipment,
+      value: [...picked(c.climate.options, s.climate), ...picked(c.extras.options, s.extras)].join(', ') || '—',
+      body: (
+        <>
+          <Field label={c.garage.label}>
+            <Stepper label={c.garage.label} value={s.vehicles} min={0} max={4} zero={c.garage.none} onChange={(n) => set({ vehicles: n })} />
+          </Field>
+          <Field label={c.climate.label}>
+            <Toggles {...c.climate} value={s.climate} onChange={(v) => set({ climate: v })} />
+          </Field>
+          <Field label={c.extras.label}>
+            <Toggles {...c.extras} value={s.extras} onChange={(v) => set({ extras: v })} />
+          </Field>
+        </>
+      ),
+    },
+    {
+      label: c.groups.look,
+      value: `${c.system.options[s.system]} · ${c.facade.options[s.facade]}`,
+      body: (
+        <>
+          <Field label={c.system.label}>
+            <Options {...c.system} value={s.system} onChange={(i) => set({ system: i })} />
+          </Field>
+          <Field label={c.facade.label}>
+            <Options {...c.facade} value={s.facade} onChange={(i) => set({ facade: i })} />
+          </Field>
+          <Field label={c.roof.label}>
+            <Options {...c.roof} value={s.roof} onChange={(i) => set({ roof: i })} />
+          </Field>
+          <p className="t-note pb-1 pt-2 text-paper/70">{c.visualNote}</p>
+        </>
       ),
     },
   ];
 
   const q = new URLSearchParams({
-    superficie: String(s.surface),
+    metres: String(input.metres),
+    habitacions: String(input.habitacions),
+    banys: String(input.banys),
+    suite: input.suite,
+    cuina: input.cuina,
+    vehicles: String(input.vehicles),
+    safareig: input.safareig ? '1' : '0',
+    installacions: input.installacions.join('-'),
+    extres: input.extres.join('-'),
     plantes: String(s.floors + 1),
-    habitacions: String(s.bedrooms + 2),
-    sistema: ['cellular', 'fusta', 'obert'][s.system],
-    estil: ['contemporani', 'mediterrani', 'obert'][s.style],
-    acabats: ['mineral', 'fusta', 'obert'][s.finishes],
-    extres: ['piscina', 'porxo', 'garatge', 'domotica', 'solar'].filter((_, i) => s.extras[i]).join('-'),
+    sistema: model.system!,
   });
+  const money = (cents: number) => new Intl.NumberFormat(lang === 'ca' ? 'ca-ES' : 'es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100);
 
   return (
     <section className="bg-ink text-paper" data-theme="dark" aria-labelledby="configurador">
       <div className="grid md:min-h-[100svh] md:grid-cols-12">
-        {/* the stage */}
-        <div className="relative h-[46svh] overflow-hidden bg-ink text-paper md:sticky md:top-0 md:col-span-7 md:h-[100svh]">
-          {/* a studio floor of light, as in a car configurator */}
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(58%_46%_at_50%_62%,rgb(244_240_232/0.13),transparent_72%)]" aria-hidden="true" />
+        {/* the stage: a studio floor of light, the model on its base */}
+        <div className="relative h-[48svh] overflow-hidden md:sticky md:top-0 md:col-span-7 md:h-[100svh]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(62%_50%_at_50%_60%,rgb(226_198_117/0.1),rgb(242_238_229/0.05)_45%,transparent_74%)]" aria-hidden="true" />
           <div className="absolute inset-0 cursor-grab touch-pan-y active:cursor-grabbing" {...drag}>
             <HouseCanvas mode="config" className="h-full w-full" label={c.name} fallback={dict.systems.fallback} onReady={onReady} />
           </div>
@@ -175,7 +290,7 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
         {/* the decisions */}
         <div className="wrap py-14 md:col-span-5 md:py-28 md:pl-[3.5vw]">
           <Reveal as="header">
-            <p className="t-note mb-5 text-water-light" data-fade>
+            <p className="t-note mb-5 text-gold-light" data-fade>
               {c.name}
             </p>
             <h2 id="configurador" className="t-title">
@@ -187,33 +302,20 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
           </Reveal>
 
           <ol className="mt-10">
-            {rows.map((r, i) => {
+            {groups.map((g, i) => {
               const on = open === i;
               return (
-                <li key={r.label} className="border-t border-paper/20 last:border-b">
+                <li key={g.label} className="border-t border-paper/20 last:border-b">
                   <h3>
-                    <button
-                      type="button"
-                      aria-expanded={on}
-                      aria-controls={`cfg-${i}`}
-                      onClick={() => setOpen(on ? -1 : i)}
-                      className="grid min-h-[3.5rem] w-full grid-cols-[2rem_1fr_auto] items-baseline gap-x-2 py-3 text-left"
-                    >
-                      <span className="t-note t-num text-paper/70">{String(i + 1).padStart(2, '0')}</span>
-                      <span className="t-serif text-[1.3rem] leading-tight">{r.label}</span>
-                      <span className={`max-w-[11rem] truncate text-right text-[0.9375rem] transition-opacity duration-300 ${on ? 'opacity-0' : 'text-paper/75'}`}>{r.value}</span>
+                    <button type="button" aria-expanded={on} aria-controls={`cfg-${i}`} onClick={() => setOpen(on ? -1 : i)} className="group grid min-h-[3.75rem] w-full grid-cols-[2rem_1fr_auto] items-baseline gap-x-2 py-3 text-left">
+                      <span className={`t-note t-num transition-colors duration-300 ${on ? 'text-gold-light' : 'text-paper/70'}`}>{String(i + 1).padStart(2, '0')}</span>
+                      <span className={`t-serif text-[1.45rem] leading-tight transition-transform duration-500 ease-[var(--ease-out)] ${on ? 'translate-x-1 italic' : ''}`}>{g.label}</span>
+                      <span className={`max-w-[12rem] truncate text-right text-[0.875rem] text-paper/75 transition-opacity duration-300 ${on ? 'opacity-0' : ''}`}>{g.value}</span>
                     </button>
                   </h3>
                   <div id={`cfg-${i}`} inert={!on} className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[var(--ease-out)] ${on ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                     <div className="overflow-hidden">
-                      <div className="pb-5 pl-[2.5rem] pt-1">
-                        {r.body}
-                        {i < rows.length - 1 && (
-                          <button type="button" onClick={() => setOpen(i + 1)} className="link mt-3 text-[0.875rem]">
-                            {c.step} {i + 2}: {rows[i + 1].label}
-                          </button>
-                        )}
-                      </div>
+                      <div className="pb-5 sm:pl-[2.5rem]">{g.body}</div>
                     </div>
                   </div>
                 </li>
@@ -221,7 +323,38 @@ export function Configurator({ dict, lang }: { dict: Dictionary; lang: Locale })
             })}
           </ol>
 
-          <p className="t-note mt-6 max-w-[40ch] text-paper/70">{c.noPrice}</p>
+          {quote ? (
+            <div className="mt-8" aria-live="polite">
+              <h3 className="t-serif text-[1.45rem]">{c.quote.title}</h3>
+              <dl className="mt-3 text-[0.9375rem]">
+                {quote.lines.map((l) => (
+                  <div key={l.key} className="flex justify-between gap-6 border-t border-paper/15 py-2">
+                    <dt className="text-paper/80">{l.label[lang]}</dt>
+                    <dd className="t-num">{money(l.amountCents)}</dd>
+                  </div>
+                ))}
+                {(
+                  [
+                    [c.quote.subtotal, quote.subtotalCents],
+                    [c.quote.vatWorks, quote.ivaObraCents],
+                    [c.quote.vatArch, quote.ivaArqCents],
+                  ] as const
+                ).map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-6 border-t border-paper/15 py-2 text-paper/80">
+                    <dt>{k}</dt>
+                    <dd className="t-num">{money(v)}</dd>
+                  </div>
+                ))}
+                <div className="flex items-baseline justify-between gap-6 border-y border-paper/40 py-3">
+                  <dt className="font-medium">{c.quote.total}</dt>
+                  <dd className="t-serif t-num text-[1.9rem] leading-none">{money(quote.totalCents)}</dd>
+                </div>
+              </dl>
+              <p className="t-note mt-3 max-w-[44ch] text-paper/70">{c.quote.note}</p>
+            </div>
+          ) : (
+            <p className="t-note mt-6 max-w-[40ch] text-paper/70">{c.noPrice}</p>
+          )}
           <Link href={`/${lang}/configurador?${q}`} className="btn btn-paper mt-6">
             {c.send}
           </Link>

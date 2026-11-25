@@ -47,25 +47,38 @@ export type Dictionary = {
   };
   materials: {
     name: string; title: string[]; text: string; note: string; sample: string;
+    /** ModularDom's published quality specification, verbatim from its configurator */
+    spec: { title: string; items: { name: string; text: string }[] };
     groups: Record<MaterialGroupId, { name: string; samples: { name: string; where: string }[] }>;
   };
   configurator: {
-    name: string; title: string[]; text: string; step: string; summary: string; send: string; noPrice: string;
+    name: string; title: string[]; text: string; send: string; noPrice: string; visualNote: string;
+    groups: { house: string; interior: string; equipment: string; look: string };
     surface: { label: string; unit: string; hint: string };
-    floors: Choice; bedrooms: Choice; system: Choice; style: Choice; finishes: Choice;
-    extras: Choice & { hint: string };
-    none: string;
+    floors: Choice; volume: Choice;
+    bedrooms: string; bathrooms: string; suite: Choice; kitchen: Choice;
+    garage: { label: string; none: string };
+    climate: Choice; extras: Choice;
+    system: Choice; facade: Choice; roof: Choice;
+    quote: { title: string; subtotal: string; vatWorks: string; vatArch: string; total: string; note: string };
   };
   process: { name: string; title: string[]; text: string; steps: { name: string; text: string }[] };
   mineral: {
-    name: string; title: string[]; text: string; audience: string;
+    name: string; title: string[]; text: string; audience: string; catalogue: string;
     slots: { name: string; text: string }[];
     form: {
       title: string; kind: Choice; units: string; name: string; company: string; email: string; phone: string;
       message: string; submit: string; ready: string; error: string; required: string;
     };
   };
-  closing: { title: string[]; text: string };
+  closing: {
+    title: string[]; text: string; showHouse: string; write: string; call: string;
+    form: {
+      title: string; motive: Choice; name: string; email: string; phone: string; message: string;
+      submit: string; ready: string; error: string; required: string;
+    };
+  };
+  footer: { legal: string };
 };
 
 const ca: Dictionary = {
@@ -128,6 +141,15 @@ const ca: Dictionary = {
     text: 'Fusta, pedra, vidre. Cada superfície de casa teva es tria amb tu.',
     note: 'Mostres conceptuals, extretes de la visualització. Els materials de cada casa es defineixen al seu projecte.',
     sample: 'Mostra conceptual',
+    spec: {
+      title: 'Memòria de qualitats',
+      items: [
+        { name: 'Sistema constructiu', text: 'Formigó cel·lular o sistema d’entramat lleuger d’altes prestacions, amb aïllament gairebé Passive House.' },
+        { name: 'Eficiència energètica', text: 'Qualificació energètica A garantida. Gran estalvi en climatització i confort tèrmic tot l’any.' },
+        { name: 'Acabats', text: 'Terra porcelànic de gran format, fusteria d’alumini amb trencament de pont tèrmic i doble envidrament.' },
+        { name: 'Instal·lacions', text: 'Il·luminació LED i instal·lacions preparades per a un habitatge eficient.' },
+      ],
+    },
     groups: {
       woods: { name: 'Fustes', samples: [{ name: 'Roure', where: 'Porta d’entrada' }, { name: 'Lamel·les de roure', where: 'Parament de l’escala' }] },
       stone: { name: 'Pedra', samples: [{ name: 'Travertí', where: 'Façana' }, { name: 'Pedra amb veta', where: 'Illa de la cuina' }] },
@@ -140,17 +162,25 @@ const ca: Dictionary = {
   configurator: {
     name: 'Configurador',
     title: ['Dissenya-la', '*al teu gust.*'],
-    text: 'Set decisions per començar a donar forma a casa teva. La resta, la definim plegats.',
-    step: 'Pas', summary: 'La teva casa', send: 'Continua al configurador',
-    noPrice: 'El pressupost el prepara l’equip de ModularDom a partir d’aquestes decisions.',
+    text: 'Dona forma a casa teva i mira-la canviar. La resta, la definim plegats.',
+    send: 'Continua al configurador',
+    noPrice: 'El pressupost detallat el prepara l’equip de ModularDom a partir d’aquestes decisions.',
+    visualNote: 'Aquestes opcions canvien la maqueta; es concreten al projecte.',
+    groups: { house: 'La casa', interior: 'L’interior', equipment: 'Equipament', look: 'Aspecte' },
     surface: { label: 'Superfície', unit: 'm²', hint: 'Superfície construïda aproximada.' },
     floors: { label: 'Plantes', options: ['Una planta', 'Dues plantes'] },
-    bedrooms: { label: 'Habitacions', options: ['2', '3', '4', '5 o més'] },
-    system: { label: 'Sistema constructiu', options: ['Formigó cel·lular', 'Entramat lleuger de fusta', 'Aconselleu-me'] },
-    style: { label: 'Estil arquitectònic', options: ['Contemporani', 'Mediterrani', 'Encara no ho sé'] },
-    finishes: { label: 'Acabats', options: ['Clars i minerals', 'Càlids, amb fusta', 'Ho decidim junts'] },
-    extras: { label: 'Extres', options: ['Piscina', 'Porxo', 'Garatge', 'Domòtica', 'Plaques solars'], hint: 'Tria tot el que t’agradaria tenir.' },
-    none: 'Sense extres',
+    volume: { label: 'Volumetria', options: ['Compacta', 'En L'] },
+    bedrooms: 'Habitacions',
+    bathrooms: 'Banys',
+    suite: { label: 'Suite principal', options: ['Sense suite', 'Suite amb bany', 'Suite amb bany i vestidor'] },
+    kitchen: { label: 'Cuina', options: ['Bàsica', 'Amb illa'] },
+    garage: { label: 'Garatge', none: 'Cap' },
+    climate: { label: 'Climatització', options: ['Aerotèrmia', 'Aire per conductes'] },
+    extras: { label: 'Extres', options: ['Safareig', 'Piscina', 'Porxo', 'Plaques solars'] },
+    system: { label: 'Sistema constructiu', options: ['Formigó cel·lular', 'Entramat lleuger de fusta'] },
+    facade: { label: 'Façana', options: ['Pedra', 'Pedra i fusta'] },
+    roof: { label: 'Coberta', options: ['Plana', 'Enjardinada'] },
+    quote: { title: 'Pressupost orientatiu', subtotal: 'Base imposable', vatWorks: 'IVA obra', vatArch: 'IVA honoraris', total: 'Total', note: 'Pressupost orientatiu subjecte a projecte tècnic, ubicació, accessibilitat i amidaments finals.' },
   },
   process: {
     name: 'Procés constructiu',
@@ -170,6 +200,7 @@ const ca: Dictionary = {
     title: ['Bungalows de', 'formigó cel·lular.'],
     text: 'La línia de ModularDom per a càmpings i complexos turístics.',
     audience: 'Per a professionals',
+    catalogue: 'Catàleg',
     slots: [
       { name: 'Models', text: 'La gamma de bungalows.' },
       { name: 'Plànols', text: 'Plantes i alçats de cada model.' },
@@ -186,7 +217,21 @@ const ca: Dictionary = {
       error: 'No s’ha pogut enviar. Torna-ho a provar.', required: 'Cal omplir aquest camp.',
     },
   },
-  closing: { title: ['L’arquitectura', '*de viure.*'], text: 'Explica’ns com vols viure-hi. La dissenyem a mida i te l’entreguem clau en mà.' },
+  closing: {
+    title: ['L’arquitectura', '*de viure.*'],
+    text: 'Explica’ns com vols viure-hi. La dissenyem a mida i te l’entreguem clau en mà.',
+    showHouse: 'Casa pilot visitable a Bellvís (Lleida).',
+    write: 'Escriu-nos', call: 'Truca’ns',
+    form: {
+      title: 'Parlem de casa teva',
+      motive: { label: 'Què necessites?', options: ['Informació', 'Visitar la casa pilot'] },
+      name: 'Nom i cognoms', email: 'Correu electrònic', phone: 'Telèfon', message: 'Explica’ns què tens al cap',
+      submit: 'Envia la sol·licitud',
+      ready: 'Sol·licitud preparada. L’enviament s’activarà quan connectem el CRM; ara no s’ha enviat res.',
+      error: 'No s’ha pogut enviar. Torna-ho a provar.', required: 'Cal omplir aquest camp.',
+    },
+  },
+  footer: { legal: 'Avís legal i privacitat: en preparació.' },
 };
 
 const es: Dictionary = {
@@ -249,6 +294,15 @@ const es: Dictionary = {
     text: 'Madera, piedra, vidrio. Cada superficie de tu casa se elige contigo.',
     note: 'Muestras conceptuales, extraídas de la visualización. Los materiales de cada casa se definen en su proyecto.',
     sample: 'Muestra conceptual',
+    spec: {
+      title: 'Memoria de calidades',
+      items: [
+        { name: 'Sistema constructivo', text: 'Hormigón celular y sistema de entramado ligero de altas prestaciones. Aislamiento casi Passive House.' },
+        { name: 'Eficiencia energética', text: 'Calificación energética A garantizada. Gran ahorro en climatización y confort térmico todo el año.' },
+        { name: 'Acabados', text: 'Suelo porcelánico de gran formato, carpintería de aluminio con rotura de puente térmico y doble acristalamiento.' },
+        { name: 'Instalaciones', text: 'Iluminación LED e instalaciones preparadas para una vivienda eficiente.' },
+      ],
+    },
     groups: {
       woods: { name: 'Maderas', samples: [{ name: 'Roble', where: 'Puerta de entrada' }, { name: 'Lamas de roble', where: 'Paramento de la escalera' }] },
       stone: { name: 'Piedra', samples: [{ name: 'Travertino', where: 'Fachada' }, { name: 'Piedra con veta', where: 'Isla de la cocina' }] },
@@ -261,17 +315,25 @@ const es: Dictionary = {
   configurator: {
     name: 'Configurador',
     title: ['Diséñala', '*a tu gusto.*'],
-    text: 'Siete decisiones para empezar a dar forma a tu casa. El resto lo definimos juntos.',
-    step: 'Paso', summary: 'Tu casa', send: 'Continúa en el configurador',
-    noPrice: 'El presupuesto lo prepara el equipo de ModularDom a partir de estas decisiones.',
+    text: 'Da forma a tu casa y mírala cambiar. El resto lo definimos juntos.',
+    send: 'Continúa en el configurador',
+    noPrice: 'El presupuesto detallado lo prepara el equipo de ModularDom a partir de estas decisiones.',
+    visualNote: 'Estas opciones cambian la maqueta; se concretan en el proyecto.',
+    groups: { house: 'La casa', interior: 'El interior', equipment: 'Equipamiento', look: 'Aspecto' },
     surface: { label: 'Superficie', unit: 'm²', hint: 'Superficie construida aproximada.' },
     floors: { label: 'Plantas', options: ['Una planta', 'Dos plantas'] },
-    bedrooms: { label: 'Habitaciones', options: ['2', '3', '4', '5 o más'] },
-    system: { label: 'Sistema constructivo', options: ['Hormigón celular', 'Entramado ligero de madera', 'Aconsejadme'] },
-    style: { label: 'Estilo arquitectónico', options: ['Contemporáneo', 'Mediterráneo', 'Aún no lo sé'] },
-    finishes: { label: 'Acabados', options: ['Claros y minerales', 'Cálidos, con madera', 'Lo decidimos juntos'] },
-    extras: { label: 'Extras', options: ['Piscina', 'Porche', 'Garaje', 'Domótica', 'Placas solares'], hint: 'Elige todo lo que te gustaría tener.' },
-    none: 'Sin extras',
+    volume: { label: 'Volumetría', options: ['Compacta', 'En L'] },
+    bedrooms: 'Habitaciones',
+    bathrooms: 'Baños',
+    suite: { label: 'Suite principal', options: ['Sin suite', 'Suite con baño', 'Suite con baño y vestidor'] },
+    kitchen: { label: 'Cocina', options: ['Básica', 'Con isla'] },
+    garage: { label: 'Garaje', none: 'Ninguno' },
+    climate: { label: 'Climatización', options: ['Aerotermia', 'Aire por conductos'] },
+    extras: { label: 'Extras', options: ['Lavadero', 'Piscina', 'Porche', 'Placas solares'] },
+    system: { label: 'Sistema constructivo', options: ['Hormigón celular', 'Entramado ligero de madera'] },
+    facade: { label: 'Fachada', options: ['Piedra', 'Piedra y madera'] },
+    roof: { label: 'Cubierta', options: ['Plana', 'Ajardinada'] },
+    quote: { title: 'Presupuesto orientativo', subtotal: 'Base imponible', vatWorks: 'IVA obra', vatArch: 'IVA honorarios', total: 'Total', note: 'Presupuesto orientativo sujeto a proyecto técnico, ubicación, accesibilidad y mediciones finales.' },
   },
   process: {
     name: 'Proceso constructivo',
@@ -291,6 +353,7 @@ const es: Dictionary = {
     title: ['Bungalows de', 'hormigón celular.'],
     text: 'La línea de ModularDom para campings y complejos turísticos.',
     audience: 'Para profesionales',
+    catalogue: 'Catálogo',
     slots: [
       { name: 'Modelos', text: 'La gama de bungalows.' },
       { name: 'Planos', text: 'Plantas y alzados de cada modelo.' },
@@ -307,7 +370,21 @@ const es: Dictionary = {
       error: 'No se ha podido enviar. Inténtalo de nuevo.', required: 'Hay que rellenar este campo.',
     },
   },
-  closing: { title: ['La arquitectura', '*de vivir.*'], text: 'Cuéntanos cómo quieres vivir en ella. La diseñamos a medida y te la entregamos llave en mano.' },
+  closing: {
+    title: ['La arquitectura', '*de vivir.*'],
+    text: 'Cuéntanos cómo quieres vivir en ella. La diseñamos a medida y te la entregamos llave en mano.',
+    showHouse: 'Casa piloto visitable en Bellvís (Lleida).',
+    write: 'Escríbenos', call: 'Llámanos',
+    form: {
+      title: 'Hablemos de tu casa',
+      motive: { label: '¿Qué necesitas?', options: ['Información', 'Visitar la casa piloto'] },
+      name: 'Nombre y apellidos', email: 'Correo electrónico', phone: 'Teléfono', message: 'Cuéntanos qué tienes en mente',
+      submit: 'Envía la solicitud',
+      ready: 'Solicitud preparada. El envío se activará cuando conectemos el CRM; ahora no se ha enviado nada.',
+      error: 'No se ha podido enviar. Inténtalo de nuevo.', required: 'Hay que rellenar este campo.',
+    },
+  },
+  footer: { legal: 'Aviso legal y privacidad: en preparación.' },
 };
 
 export const dictionaries: Record<Locale, Dictionary> = { ca, es };

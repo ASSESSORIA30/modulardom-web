@@ -111,7 +111,7 @@ export function Systems({ dict }: { dict: Dictionary }) {
           <div className="wrap relative flex h-[100svh] flex-col justify-end pb-6 pt-[calc(var(--header-h)+0.5rem)] md:justify-center md:pb-0">
             <div className="md:w-[min(40%,30rem)]">
               <Reveal as="header" className="max-md:hidden">
-                <p className="t-note mb-4 text-water-light" data-fade>
+                <p className="t-note mb-4 text-gold-light" data-fade>
                   {s.name}
                 </p>
                 <h2 id="sistemes" className="t-title">
@@ -157,7 +157,7 @@ export function Systems({ dict }: { dict: Dictionary }) {
                         onBlur={() => focus(null)}
                         className="group grid w-full grid-cols-[2.25rem_1fr] items-baseline py-2 text-left md:py-[0.55rem]"
                       >
-                        <span className={`t-note t-num transition-colors duration-300 ${on ? 'text-water-light' : 'text-paper/70'}`}>{String(i + 1).padStart(2, '0')}</span>
+                        <span className={`t-note t-num transition-colors duration-300 ${on ? 'text-gold-light' : 'text-paper/70'}`}>{String(i + 1).padStart(2, '0')}</span>
                         <span>
                           <span className={`block font-display text-[1.3rem] leading-tight transition-[opacity,transform] duration-500 ease-[var(--ease-out)] md:text-[1.4rem] ${on ? 'translate-x-2 opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
                             {layer.name}
@@ -177,7 +177,7 @@ export function Systems({ dict }: { dict: Dictionary }) {
 
               <div className="mt-4 flex items-center gap-4 md:mt-6">
                 <span className="relative block h-px flex-1 bg-paper/20" aria-hidden="true">
-                  <span ref={bar} className="absolute inset-0 origin-left scale-x-0 bg-water-light" />
+                  <span ref={bar} className="absolute inset-0 origin-left scale-x-0 bg-gold-light" />
                 </span>
                 <p className={`t-note text-paper/70 transition-opacity duration-500 ${started ? 'opacity-0' : 'opacity-100'}`} aria-hidden={started}>
                   {s.hint}

@@ -33,7 +33,9 @@ export function HouseCanvas({ mode, className, label, fallback, onReady }: Props
       ([e]) => {
         if (!e.isIntersecting) return;
         near.disconnect();
-        import('./scene').then(({ createHouseScene }) => {
+        import('./scene').then(async ({ createHouseScene }) => {
+          // build the model when the page is idle, never in the middle of a scroll gesture
+          await new Promise<void>((r) => ('requestIdleCallback' in window ? requestIdleCallback(() => r(), { timeout: 1200 }) : setTimeout(r, 60)));
           if (cancelled) return;
           try {
             scene = createHouseScene(el, { mode });
