@@ -1,4 +1,8 @@
 {
+  "closing": {
+    "w": 1670,
+    "h": 941
+  },
   "closing-standin": {
     "w": 2560,
     "h": 1440
@@ -55,13 +59,13 @@
     "w": 1400,
     "h": 2160
   },
-  "poster-p": {
-    "w": 480,
-    "h": 854
-  },
   "poster": {
     "w": 1024,
     "h": 576
+  },
+  "poster-p": {
+    "w": 480,
+    "h": 854
   },
   "space-acces": {
     "w": 1300,
@@ -87,15 +91,11 @@
     "w": 2200,
     "h": 1238
   },
-  "tour-cuina-p": {
-    "w": 864,
-    "h": 1538
-  },
   "tour-cuina": {
     "w": 1920,
     "h": 1080
   },
-  "tour-entrada-p": {
+  "tour-cuina-p": {
     "w": 864,
     "h": 1538
   },
@@ -103,7 +103,7 @@
     "w": 1920,
     "h": 1080
   },
-  "tour-exterior-p": {
+  "tour-entrada-p": {
     "w": 864,
     "h": 1538
   },
@@ -111,12 +111,16 @@
     "w": 1920,
     "h": 1080
   },
-  "tour-interior-p": {
+  "tour-exterior-p": {
     "w": 864,
     "h": 1538
   },
   "tour-interior": {
     "w": 1920,
     "h": 1080
+  },
+  "tour-interior-p": {
+    "w": 864,
+    "h": 1538
   }
 }

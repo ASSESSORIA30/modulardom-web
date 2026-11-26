@@ -35,5 +35,5 @@ límit durador (regles del Firewall de Vercel o un comptador en KV).
 
 ## Recursos pendents del client
 
-Logotip vectorial · `03-mansio-nocturna.png` · fotografies d'obres reals · models MINERAL ·
+Logotip vectorial · fotografies d'obres reals · models MINERAL ·
 text de la política de privacitat · adreça postal si s'ha de publicar.

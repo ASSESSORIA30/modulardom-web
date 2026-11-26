@@ -50,7 +50,7 @@ Els «proyectos realizados» de la web actual semblen renders i **no** s'utilitz
 ## Interruptors de contingut (`src/content/site.ts`)
 
 Reclam de preu («des de 993 €/m²») · logotip vectorial · WhatsApp (número verificat, botó apagat) ·
-àrea de clients (enllaç al portal del CRM, apagat) · imatge nocturna de tancament.
+àrea de clients (enllaç al portal del CRM, apagat). La imatge nocturna definitiva ja és al tancament (`media/03-mansio-nocturna.png`).
 Obres reals: `src/content/projects.ts`. Models MINERAL: `src/content/mineral.ts`.
 
 ## El muntatge del recorregut

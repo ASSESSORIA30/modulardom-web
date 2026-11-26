@@ -45,8 +45,8 @@ export const CLIENT_AREA: { enabled: boolean; url: string } = { enabled: false, 
 export const waHref = (message: string) => (WHATSAPP.enabled && WHATSAPP.number ? `https://wa.me/${WHATSAPP.number}?text=${encodeURIComponent(message)}` : null);
 
 /*
-  The closing picture. `03-mansio-nocturna.png` is still not in the repository, so a frame of the
-  exterior stands in, graded towards night in CSS. To use the real picture: save it as
-  public/stills/closing.webp (about 2560 px wide) and set { still: 'closing', standIn: false }.
+  The closing picture: the definitive night view (media/03-mansio-nocturna.png, 1670 px wide as
+  supplied; a larger original would be sharper on big screens). `standIn: true` would grade a
+  daytime frame towards night in CSS instead.
 */
-export const CLOSING = { still: 'closing-standin', standIn: true };
+export const CLOSING = { still: 'closing', standIn: false };
