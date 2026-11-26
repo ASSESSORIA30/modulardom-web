@@ -1,4 +1,4 @@
-import type { Tariff } from '@/lib/configurator/engine';
+import { roofParamsValid, type RoofParams, type Tariff } from '@/lib/configurator/engine';
 import { env } from './env';
 
 /*
@@ -28,6 +28,8 @@ export function isTariff(p: unknown): p is Tariff {
   if (!rec(c) || !num(c.basica) || !num(c.illa)) return false;
   if (!rec(p.installacions_m2) || !Object.values(p.installacions_m2).every((x) => rec(x) && l10n(x.nom) && num(x.preu_m2))) return false;
   if (!rec(p.extres) || !Object.values(p.extres).every((x) => rec(x) && l10n(x.nom) && num(x.preu))) return false;
+  // the roof block is optional, but if it is there it has to be whole
+  if (p.coberta !== undefined && !roofParamsValid(p.coberta as RoofParams)) return false;
   const o = p.opcions;
   return rec(o) && Array.isArray(o.habitacions) && Array.isArray(o.banys) && [...o.habitacions, ...o.banys].every((n) => Number.isInteger(n));
 }

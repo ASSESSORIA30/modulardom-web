@@ -47,6 +47,8 @@ export function HouseCanvas({ mode, className, label, fallback, onReady }: Props
             setFailed(true);
             return;
           }
+          // a handle for visual checks, only with ?house3d=hq or ?house3d=debug
+          if (/[?&]house3d=(hq|debug)/.test(location.search)) (window as unknown as { __house?: HouseScene }).__house = scene;
           el.dataset.ready = '';
           cleanup = ready.current(scene);
           scene.setActive(visible);

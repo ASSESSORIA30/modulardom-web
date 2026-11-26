@@ -3,12 +3,14 @@ import { dedupeKey, toCrm, webReference } from '@/server/leads';
 import { publicQuote } from '@/server/quote';
 import { _reset, allow } from '@/server/rate-limit';
 import { isTariff } from '@/server/tariff';
-import { parseEngineInput, parseLead } from '@/server/validate';
+import { parseEngineInput, parseLead, parseVisual } from '@/server/validate';
 import { TEST_TARIFF as T } from './fixtures/tariff';
 
 const config = { metres: 180, habitacions: 3, banys: 2, suite: 'bano', cuina: 'isla', vehicles: 1, safareig: true, installacions: ['aerotermia'], extres: ['piscina'] };
 const now = 1_800_000_000_000;
 const form = { kind: 'quote', lang: 'ca', name: 'Anna Prova', email: ' Anna@Example.com ', phone: '+34 600 11 22 33', consent: true, website: '', startedAt: now - 20_000, config, visual: { floors: 2, system: 'cellular', facade: 'mineral', roof: 'flat', volume: 'compact' } };
+
+const q0 = (t: typeof T, metres: number) => publicQuote(t, 8, parseEngineInput({ ...config, metres })!)!;
 
 describe('what a visitor is told about a budget', () => {
   const q = publicQuote(T, 7, parseEngineInput(config)!)!;
@@ -21,6 +23,38 @@ describe('what a visitor is told about a budget', () => {
     const wire = JSON.stringify(q);
     for (const secret of ['unitPriceCents', 'originalCents', 'discountPct', 'quantity', 'internal', 'construccio_m2', 'intern', 'preu']) expect(wire).not.toContain(`"${secret}"`);
     for (const l of q.lines) expect(Object.keys(l).sort()).toEqual(l.detail ? ['amountCents', 'detail', 'key', 'label'] : ['amountCents', 'key', 'label']);
+  });
+  it('prices a pitched roof by its own square metres and says how many', () => {
+    const R = { ...T, coberta: { inclinada: { preu_m2: 150, pendent_pct: 30 }, dues_aigues: { preu_m2: 180, pendent_pct: 40 }, volada_m: 0.5, proporcio: 1.5 } };
+    const one = publicQuote(R, 8, parseEngineInput({ ...config, metres: 200, plantes: 1, coberta: 'inclinada' })!)!;
+    const two = publicQuote(R, 8, parseEngineInput({ ...config, metres: 200, plantes: 2, coberta: 'inclinada' })!)!;
+    expect(one.roof).toMatchObject({ areaM2: 240, estimated: true });
+    expect(one.lines.find((l) => l.key === 'coberta')).toMatchObject({ amountCents: 3_600_000, detail: { ca: '240,0 m² de coberta (superfície estimada)' } });
+    expect(two.roof!.areaM2).toBe(126.8);
+    expect(one.totalCents - q0(R, 200).totalCents).toBe(3_960_000);
+    expect(isTariff(R)).toBe(true);
+    expect(isTariff({ ...R, coberta: { ...R.coberta, proporcio: 0 } })).toBe(false);
+  });
+  it('shows an option without a validated price as pending, never as free', () => {
+    const noRoof = publicQuote(T, 7, parseEngineInput({ ...config, coberta: 'dues_aigues' })!)!;
+    expect(noRoof.hasPending).toBe(true);
+    expect(noRoof.lines.find((l) => l.key === 'coberta')).toMatchObject({ pending: true, amountCents: 0 });
+    const { placasSolares: _gone, ...extres } = { placasSolares: null, ...T.extres };
+    void _gone;
+    const noSolar = publicQuote({ ...T, extres }, 7, parseEngineInput({ ...config, extres: ['piscina', 'placasSolares'] })!)!;
+    expect(noSolar.lines.find((l) => l.key === 'extra:placasSolares')).toMatchObject({ pending: true, amountCents: 0 });
+    expect(noSolar.totalCents).toBe(q.totalCents);
+  });
+  it('reads an older configuration as one floor and a flat roof, and refuses a measured area from a visitor', () => {
+    expect(parseEngineInput(config)).toMatchObject({ plantes: 1, coberta: 'plana' });
+    expect(parseEngineInput({ ...config, coberta: 'vegetal' })).toBeNull();
+    expect(parseEngineInput({ ...config, coberta: 'inclinada', coberta_m2: 5 })).not.toHaveProperty('coberta_m2');
+    expect(parseVisual({ floors: 1, system: 'cellular', facade: 'mineral', roof: 'green', volume: 'compact' })!.roof).toBe('flat');
+  });
+  it('keeps floors and roof consistent between the engine and the model', () => {
+    const p = parseLead({ ...form, config: { ...config, plantes: 1, coberta: 'dues_aigues' }, visual: { ...form.visual, floors: 2, roof: 'flat' } }, now) as { lead: { config: { plantes: number }; visual: { roof: string } } };
+    expect(p.lead.config.plantes).toBe(2);
+    expect(p.lead.visual.roof).toBe('gable');
   });
   it('gives nothing for a configuration the tariff does not allow', () => {
     expect(publicQuote(T, 7, { ...parseEngineInput(config)!, metres: 60 })).toBeNull();

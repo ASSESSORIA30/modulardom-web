@@ -74,6 +74,21 @@ la validació en un projecte de proves de Supabase; fins llavors `CRM_LEADS_ENAB
 apagat i els formularis diuen al visitant que la sol·licitud **no** s'ha enviat i li donen el
 correu i el telèfon.
 
+## Pressupostos del configurador
+
+Mateixa signatura i mateix secret que els leads; el detall és a `docs/11-PRESSUPOSTOS-WEB.md` del CRM.
+
+| Ruta del CRM | Què hi envia la web |
+|---|---|
+| `POST /api/web/quotes` | `{ lead, quote }`: el lead de sempre (tipus `quote`, amb la configuració) i el desglossament calculat aquí. Respon la referència que val, la versió i un enllaç de recuperació. |
+| `PUT /api/web/quotes/pdf?id=…` | El PDF generat. La signatura cobreix `<timestamp>.<id>.<sha256 del PDF>`. |
+| `POST /api/web/quotes/pdf` | `{ id }` o `{ token }`: torna el PDF original. |
+| `POST /api/web/quotes/recover` | `{ token }`: configuració i imports originals, sense dades personals. |
+| `POST /api/web/quotes/visit` | `{ token, reference }`: visita lligada al mateix client i pressupost. |
+
+La configuració porta ara `plantes` (1 o 2) i `coberta` (`plana`, `inclinada`, `dues_aigues`), opcionals:
+una configuració antiga val per una planta i coberta plana. `visual.roof` és `flat`, `mono` o `gable`.
+
 ## Observacions de seguretat sobre l'existent (no tocades)
 
 - A la web antiga, `/presupuesto/admin.html` i `/presupuesto/README.txt` són públics.

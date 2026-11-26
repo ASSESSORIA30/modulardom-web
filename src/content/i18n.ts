@@ -85,6 +85,14 @@ export type Dictionary = {
     sending: string; sent: string; notSent: string; error: string; rate: string;
   };
   request: { title: string; text: string; submit: string; dossier: string; dossierError: string; preparing: string };
+  budget: {
+    download: string; visit: string; total: string; pending: string; pendingNote: string; roofHint: string;
+    formTitle: string; formText: string; visitTitle: string; visitText: string; city: string; optional: string; privacyNote: string;
+    submitDownload: string; submitVisit: string; preparing: string; sending: string; close: string;
+    done: string; reissued: string; recoverTitle: string; recoverText: string; copy: string; copied: string;
+    visitDone: string; visitAgain: string; noPrice: string; error: string;
+    recovered: string; original: string; current: string; sameTariff: string; originalPdf: string; recoverFail: string;
+  };
   whatsapp: { general: string; configurator: string; visit: string; mineral: string };
   projectsPage: { title: string[]; emptyTitle: string; emptyText: string; plans: string };
   closing: {
@@ -174,11 +182,11 @@ const ca: Dictionary = {
   },
   configurator: {
     name: 'Configurador',
-    title: ['Dissenya-la', '*al teu gust.*'],
-    text: 'Dona forma a casa teva i mira-la canviar. La resta, la definim plegats.',
+    title: ['Calcula', '*el teu pressupost.*'],
+    text: 'Configura casa teva i mira el preu al moment, sense registrar-te.',
     send: 'Continua al configurador',
     noPrice: 'El pressupost detallat el prepara l’equip de ModularDom a partir d’aquestes decisions.',
-    visualNote: 'Aquestes opcions canvien la maqueta; es concreten al projecte.',
+    visualNote: 'El sistema i la façana canvien la maqueta i es concreten al projecte.',
     groups: { house: 'La casa', interior: 'L’interior', equipment: 'Equipament', look: 'Aspecte' },
     surface: { label: 'Superfície', unit: 'm²', hint: 'Superfície construïda aproximada.' },
     floors: { label: 'Plantes', options: ['Una planta', 'Dues plantes'] },
@@ -189,10 +197,10 @@ const ca: Dictionary = {
     kitchen: { label: 'Cuina', options: ['Bàsica', 'Amb illa'] },
     garage: { label: 'Garatge', none: 'Cap' },
     climate: { label: 'Climatització', options: ['Aerotèrmia', 'Aire per conductes'] },
-    extras: { label: 'Extres', options: ['Safareig', 'Piscina', 'Porxo', 'Plaques solars'] },
+    extras: { label: 'Extres', options: ['Safareig', 'Piscina', 'Porxo', 'Plaques solars fotovoltaiques'] },
     system: { label: 'Sistema constructiu', options: ['Formigó cel·lular', 'Entramat lleuger de fusta'] },
     facade: { label: 'Façana', options: ['Pedra', 'Pedra i fusta'] },
-    roof: { label: 'Coberta', options: ['Plana', 'Enjardinada'] },
+    roof: { label: 'Coberta', options: ['Plana', 'Inclinada d’una aigua', 'A dues aigües'] },
     quote: { title: 'Pressupost orientatiu', subtotal: 'Base imposable', vatWorks: 'IVA obra', vatArch: 'IVA honoraris', total: 'Total', note: 'Pressupost orientatiu subjecte a projecte tècnic, ubicació, accessibilitat i amidaments finals.' },
   },
   process: {
@@ -258,6 +266,24 @@ const ca: Dictionary = {
     notSent: 'Ara mateix la web encara no pot rebre sol·licituds i no s’ha enviat res. Escriu-nos a {email} o truca’ns al {phone}.',
     error: 'No s’ha pogut enviar. Torna-ho a provar o escriu-nos a {email}.',
     rate: 'Massa intents seguits. Torna-ho a provar d’aquí a uns minuts.',
+  },
+  budget: {
+    download: 'Descarregar pressupost', visit: 'Reserva una visita a la nostra casa pilot', total: 'Total amb IVA',
+    pending: 'Pendent de valorar', pendingNote: 'El total no inclou les partides pendents de valorar: les valorem en l’estudi tècnic.',
+    roofHint: 'La coberta plana és l’estàndard, sense suplement. Les inclinades es calculen pels metres quadrats de coberta.',
+    formTitle: 'A nom de qui fem el pressupost?', formText: 'El descarregaràs a l’instant, en PDF. No cal crear cap compte.',
+    visitTitle: 'Reserva una visita a la casa pilot', visitText: 'Deixa’ns les teves dades i et trucarem per confirmar dia i hora.',
+    city: 'Municipi on vols construir', optional: 'opcional',
+    privacyNote: 'Farem servir aquestes dades només per atendre aquesta sol·licitud. Descarregar el pressupost no t’apunta a cap comunicació comercial.',
+    submitDownload: 'Descarregar pressupost', submitVisit: 'Sol·licitar la visita', preparing: 'Preparant el pressupost…', sending: 'Enviant…', close: 'Tanca',
+    done: 'Pressupost descarregat. Referència: {ref}.', reissued: 'És el mateix pressupost que ja tenies: conserva la referència {ref}.',
+    recoverTitle: 'El teu enllaç privat', recoverText: 'Desa’l per tornar a aquest pressupost durant {days} dies, canviar opcions i generar-ne un d’actualitzat. No conté cap dada personal.',
+    copy: 'Copia l’enllaç', copied: 'Enllaç copiat',
+    visitDone: 'Visita sol·licitada. Et contactarem per confirmar dia i hora.', visitAgain: 'Ja tenim la teva sol·licitud de visita. Et contactarem per confirmar-la.',
+    noPrice: 'Ara mateix no podem calcular el pressupost i no s’ha generat cap document. Torna-ho a provar d’aquí a una estona o escriu-nos a {email}.',
+    error: 'No s’ha pogut completar i no s’ha desat res a mitges. Torna-ho a provar: no es duplicarà.',
+    recovered: 'Has recuperat el pressupost {ref}, del {date}.', original: 'Total del pressupost original (tarifa {n})', current: 'Aquesta configuració amb la tarifa vigent',
+    sameTariff: 'La tarifa no ha canviat des de llavors.', originalPdf: 'Descarrega el PDF original', recoverFail: 'Aquest enllaç ja no és vàlid: ha caducat o s’ha revocat.',
   },
   request: {
     title: 'Rep el teu pressupost',
@@ -359,11 +385,11 @@ const es: Dictionary = {
   },
   configurator: {
     name: 'Configurador',
-    title: ['Diséñala', '*a tu gusto.*'],
-    text: 'Da forma a tu casa y mírala cambiar. El resto lo definimos juntos.',
+    title: ['Calcula', '*tu presupuesto.*'],
+    text: 'Configura tu casa y mira el precio al momento, sin registrarte.',
     send: 'Continúa en el configurador',
     noPrice: 'El presupuesto detallado lo prepara el equipo de ModularDom a partir de estas decisiones.',
-    visualNote: 'Estas opciones cambian la maqueta; se concretan en el proyecto.',
+    visualNote: 'El sistema y la fachada cambian la maqueta y se concretan en el proyecto.',
     groups: { house: 'La casa', interior: 'El interior', equipment: 'Equipamiento', look: 'Aspecto' },
     surface: { label: 'Superficie', unit: 'm²', hint: 'Superficie construida aproximada.' },
     floors: { label: 'Plantas', options: ['Una planta', 'Dos plantas'] },
@@ -374,10 +400,10 @@ const es: Dictionary = {
     kitchen: { label: 'Cocina', options: ['Básica', 'Con isla'] },
     garage: { label: 'Garaje', none: 'Ninguno' },
     climate: { label: 'Climatización', options: ['Aerotermia', 'Aire por conductos'] },
-    extras: { label: 'Extras', options: ['Lavadero', 'Piscina', 'Porche', 'Placas solares'] },
+    extras: { label: 'Extras', options: ['Lavadero', 'Piscina', 'Porche', 'Placas solares fotovoltaicas'] },
     system: { label: 'Sistema constructivo', options: ['Hormigón celular', 'Entramado ligero de madera'] },
     facade: { label: 'Fachada', options: ['Piedra', 'Piedra y madera'] },
-    roof: { label: 'Cubierta', options: ['Plana', 'Ajardinada'] },
+    roof: { label: 'Cubierta', options: ['Plana', 'Inclinada a un agua', 'A dos aguas'] },
     quote: { title: 'Presupuesto orientativo', subtotal: 'Base imponible', vatWorks: 'IVA obra', vatArch: 'IVA honorarios', total: 'Total', note: 'Presupuesto orientativo sujeto a proyecto técnico, ubicación, accesibilidad y mediciones finales.' },
   },
   process: {
@@ -443,6 +469,24 @@ const es: Dictionary = {
     notSent: 'Ahora mismo la web aún no puede recibir solicitudes y no se ha enviado nada. Escríbenos a {email} o llámanos al {phone}.',
     error: 'No se ha podido enviar. Inténtalo de nuevo o escríbenos a {email}.',
     rate: 'Demasiados intentos seguidos. Inténtalo de nuevo dentro de unos minutos.',
+  },
+  budget: {
+    download: 'Descargar presupuesto', visit: 'Reserva una visita a nuestra casa piloto', total: 'Total con IVA',
+    pending: 'Pendiente de valorar', pendingNote: 'El total no incluye las partidas pendientes de valorar: las valoramos en el estudio técnico.',
+    roofHint: 'La cubierta plana es el estándar, sin suplemento. Las inclinadas se calculan por los metros cuadrados de cubierta.',
+    formTitle: '¿A nombre de quién hacemos el presupuesto?', formText: 'Lo descargarás al instante, en PDF. No hace falta crear ninguna cuenta.',
+    visitTitle: 'Reserva una visita a la casa piloto', visitText: 'Déjanos tus datos y te llamaremos para confirmar día y hora.',
+    city: 'Municipio donde quieres construir', optional: 'opcional',
+    privacyNote: 'Usaremos estos datos solo para atender esta solicitud. Descargar el presupuesto no te apunta a ninguna comunicación comercial.',
+    submitDownload: 'Descargar presupuesto', submitVisit: 'Solicitar la visita', preparing: 'Preparando el presupuesto…', sending: 'Enviando…', close: 'Cerrar',
+    done: 'Presupuesto descargado. Referencia: {ref}.', reissued: 'Es el mismo presupuesto que ya tenías: conserva la referencia {ref}.',
+    recoverTitle: 'Tu enlace privado', recoverText: 'Guárdalo para volver a este presupuesto durante {days} días, cambiar opciones y generar uno actualizado. No contiene ningún dato personal.',
+    copy: 'Copiar el enlace', copied: 'Enlace copiado',
+    visitDone: 'Visita solicitada. Te contactaremos para confirmar día y hora.', visitAgain: 'Ya tenemos tu solicitud de visita. Te contactaremos para confirmarla.',
+    noPrice: 'Ahora mismo no podemos calcular el presupuesto y no se ha generado ningún documento. Vuelve a intentarlo en un rato o escríbenos a {email}.',
+    error: 'No se ha podido completar y no se ha guardado nada a medias. Vuelve a intentarlo: no se duplicará.',
+    recovered: 'Has recuperado el presupuesto {ref}, del {date}.', original: 'Total del presupuesto original (tarifa {n})', current: 'Esta configuración con la tarifa vigente',
+    sameTariff: 'La tarifa no ha cambiado desde entonces.', originalPdf: 'Descarga el PDF original', recoverFail: 'Este enlace ya no es válido: ha caducado o se ha revocado.',
   },
   request: {
     title: 'Recibe tu presupuesto',

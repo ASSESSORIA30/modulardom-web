@@ -6,7 +6,7 @@ servidor (Vercel → Settings → Environment Variables), mai amb codi que arrib
 | Variable | Què fa | Per defecte |
 |---|---|---|
 | `CRM_TARIFF_URL` | Adreça JSON de la tarifa publicada pel CRM (`…/api/configurador/tarifa`). El servidor la llegeix; el navegador mai. | buida: no es calcula res |
-| `PRICING_PUBLIC` | `true` perquè el configurador i el dossier mostrin el pressupost orientatiu. Cal també la tarifa. | apagat |
+| `PRICING_PUBLIC` | `true` perquè el configurador mostri el pressupost orientatiu i es pugui descarregar. Cal també la tarifa. | apagat |
 | `CRM_LEAD_URL` | Endpoint del CRM que rep els leads (vegeu `crm-integration.md`). | buida |
 | `CRM_LEAD_SECRET` | Secret compartit per signar cada lead (HMAC-SHA256). | buit |
 | `CRM_LEADS_ENABLED` | `true` per enviar leads de debò. Calen les dues anteriors. | apagat |
@@ -36,8 +36,15 @@ Interruptors de contingut (no secrets) a `src/content/site.ts`: reclam de preu, 
   script insistent).
 - El límit **durador** dels formularis és al CRM, a la seva base de dades: per visitant (la web
   hi envia un pseudònim de l'adreça, mai l'adreça), per servidor i global. No cal cap servei
-  de pagament. `/api/quote` i `/api/dossier` no recullen dades personals i només tenen el
+  de pagament. `/api/quote` no recull dades personals i només té el
   límit per instància; si mai se n'abusa, s'hi pot afegir una regla al Firewall de Vercel.
+
+## Descàrrega del pressupost
+
+Calen les tres coses alhora: tarifa publicada (`CRM_TARIFF_URL`), `PRICING_PUBLIC=true` i la recepció
+de leads activa. Si en falta cap, el botó no lliura cap PDF i el visitant veu que no s'ha enviat res.
+A producció, a més, cal la política de privacitat publicada (vegeu a sota). Les rutes del CRM
+(`/api/web/quotes`, `/pdf`, `/recover`, `/visit`) es dedueixen de `CRM_LEAD_URL`: no hi ha cap variable nova.
 
 ## Privacitat
 

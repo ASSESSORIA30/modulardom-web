@@ -30,17 +30,23 @@ export function parseEngineInput(v: unknown): EngineInput | null {
   const installacions = keys(v.installacions, CLIMATE_KEYS);
   const extres = keys(v.extres, EXTRA_KEYS);
   if (metres === null || habitacions === null || banys === null || !suite || !cuina || vehicles === null || typeof v.safareig !== 'boolean' || !installacions || !extres) return null;
-  return { metres, habitacions, banys, suite, cuina, vehicles, safareig: v.safareig, installacions, extres };
+  // floors and roof arrived later: absent in an older configuration, which then means one floor and a flat roof.
+  // A measured roof area is never taken from a visitor: that is entered in the CRM.
+  const plantes = v.plantes === undefined ? 1 : (int(v.plantes, 1, 2) as 1 | 2 | null);
+  const coberta = v.coberta === undefined ? 'plana' : oneOf(v.coberta, ['plana', 'inclinada', 'dues_aigues'] as const);
+  if (!plantes || !coberta) return null;
+  return { metres, habitacions, banys, suite, cuina, vehicles, safareig: v.safareig, installacions, extres, plantes, coberta };
 }
 
 /** choices that shape the model but are not priced by the engine: settled in the project */
-export type VisualChoices = { floors: 1 | 2; system: 'cellular' | 'timber'; facade: 'mineral' | 'wood'; roof: 'flat' | 'green'; volume: 'compact' | 'L' };
+export type VisualChoices = { floors: 1 | 2; system: 'cellular' | 'timber'; facade: 'mineral' | 'wood'; roof: 'flat' | 'mono' | 'gable'; volume: 'compact' | 'L' };
 export function parseVisual(v: unknown): VisualChoices | null {
   if (!isObj(v)) return null;
   const floors = int(v.floors, 1, 2) as 1 | 2 | null;
   const system = oneOf(v.system, ['cellular', 'timber'] as const);
   const facade = oneOf(v.facade, ['mineral', 'wood'] as const);
-  const roof = oneOf(v.roof, ['flat', 'green'] as const);
+  // 'green' (the planted roof, withdrawn) may still arrive in an old link: it reads as flat
+  const roof = v.roof === 'green' ? 'flat' : oneOf(v.roof, ['flat', 'mono', 'gable'] as const);
   const volume = oneOf(v.volume, ['compact', 'L'] as const);
   return floors && system && facade && roof && volume ? { floors, system, facade, roof, volume } : null;
 }
@@ -96,6 +102,11 @@ export function parseLead(v: unknown, now = Date.now()): { lead: LeadInput } | {
   const config = v.config == null ? null : parseEngineInput(v.config);
   const visual = v.visual == null ? null : parseVisual(v.visual);
   if ((v.config != null && !config) || (v.visual != null && !visual)) errors.push({ field: 'config', code: 'invalid' });
+  // floors and roof are said twice (to the engine and to the model): the engine's word is the one that counts
+  if (config && visual) {
+    config.plantes = visual.floors;
+    visual.roof = ({ plana: 'flat', inclinada: 'mono', dues_aigues: 'gable' } as const)[config.coberta ?? 'plana'];
+  }
   if (kind === 'quote' && !config) errors.push({ field: 'config', code: 'required' });
   const units = v.units == null ? null : int(v.units, 1, 500);
   if (v.units != null && units === null) errors.push({ field: 'units', code: 'invalid' });

@@ -138,3 +138,35 @@ describe('budget engine: parity with ModularDom’s original motor.js', () => {
     }
   });
 });
+
+// Roofs. 150 and 180 €/m² are the prices ModularDom set; pitch, overhang and proportion here are
+// TEST values: the real ones are entered in the CRM's tariff.
+describe('budget engine: pitched roofs (same cases as the CRM engine)', () => {
+  const R = { ...T, coberta: { inclinada: { preu_m2: 150, pendent_pct: 30 }, dues_aigues: { preu_m2: 180, pendent_pct: 40 }, volada_m: 0.5, proporcio: 1.5 } };
+  const house: EngineInput = { metres: 200, habitacions: 3, banys: 2, suite: 'bano', cuina: 'isla', vehicles: 1, safareig: false, installacions: ['aerotermia'], extres: ['piscina'] };
+  const flat = calculate(R, { ...house, plantes: 1, coberta: 'plana' });
+  const roofLine = (c: EngineInput, t = R) => calculate(t, c).lines.find((l) => l.key === 'coberta');
+  it('flat roof: no line, same total as a configuration from before roofs existed', () => {
+    expect(flat.lines.some((l) => l.key === 'coberta')).toBe(false);
+    expect(flat.totalCents).toBe(calculate(T, house).totalCents);
+  });
+  it('one floor: 240.0 m² × 150 €', () => {
+    expect(roofLine({ ...house, plantes: 1, coberta: 'inclinada' })!.amountCents).toBe(3_600_000);
+    expect(calculate(R, { ...house, plantes: 1, coberta: 'inclinada' }).roof).toEqual({ type: 'inclinada', areaM2: 240, estimated: true, priced: true });
+  });
+  it('two floors: the footprint (100 m²), not the 200 m² built → 126.8 m²', () => {
+    expect(roofLine({ ...house, plantes: 2, coberta: 'inclinada' })!.amountCents).toBe(1_902_000);
+  });
+  it('gable: its own price and pitch → 247.6 m² × 180 €', () => {
+    expect(roofLine({ ...house, plantes: 1, coberta: 'dues_aigues' })!.amountCents).toBe(4_456_800);
+  });
+  it('a measured area is used as given', () => {
+    expect(roofLine({ ...house, plantes: 2, coberta: 'dues_aigues', coberta_m2: 131.25 })!.amountCents).toBe(2_363_400);
+  });
+  it('without roof prices in the tariff the pitched roof is pending, not free', () => {
+    const r = calculate(T, { ...house, plantes: 1, coberta: 'inclinada' });
+    expect(r.lines.find((l) => l.key === 'coberta')).toMatchObject({ pending: true, amountCents: 0 });
+    expect(r.pending).toEqual(['coberta']);
+    expect(r.totalCents).toBe(flat.totalCents);
+  });
+});

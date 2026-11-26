@@ -35,7 +35,8 @@ export type HouseConfig = {
   finish: 'mineral' | 'wood';
   /** massing: one bar, or an L with a single-storey wing */
   volume: 'compact' | 'L';
-  roof: 'flat' | 'green';
+  /** flat; 'mono' one slope falling to the front; 'gable' two slopes, ridge along the long side. Anything else reads as flat */
+  roof: 'flat' | 'mono' | 'gable';
   pool: boolean;
   porch: boolean;
   garage: boolean;
@@ -210,7 +211,7 @@ function glazing(w: Wall): { glass: Box[]; frames: Box[]; doors: Box[]; sills: B
 
 /* —— scene —— */
 
-type Part = { mesh: THREE.InstancedMesh; layer: LayerId; vol: 'G' | 'U' | 'base'; n: [number, number]; system?: SystemId; only?: 1 | 2; y0: number };
+type Part = { mesh: THREE.InstancedMesh; layer: LayerId; vol: 'G' | 'U' | 'base'; n: [number, number]; system?: SystemId; only?: 1 | 2; /** a flat roof plane or its coping: gives way to a pitched roof */ flat?: boolean; y0: number };
 
 export type HouseScene = {
   /** 0 assembled → 1 fully apart */
@@ -373,8 +374,8 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
     { p: [x - w / 2, y, z], s: [0.06, 0.16, d + 0.06] },
     { p: [x + w / 2, y, z], s: [0.06, 0.16, d + 0.06] },
   ];
-  add([{ p: [-2, 6.5, -0.7], s: [9.5, 0.16, 7.7] }], M.roof, { layer: 'roof', vol: 'U', n: none, only: 2 });
-  add(edge(-2, 6.5, -0.7, 9.5, 7.7), M.coping, { layer: 'roof', vol: 'U', n: none, only: 2 });
+  add([{ p: [-2, 6.5, -0.7], s: [9.5, 0.16, 7.7] }], M.roof, { layer: 'roof', vol: 'U', n: none, only: 2, flat: true });
+  add(edge(-2, 6.5, -0.7, 9.5, 7.7), M.coping, { layer: 'roof', vol: 'U', n: none, only: 2, flat: true });
   const deck: Box[] = [];
   for (let z = -3.84; z < 3.9; z += 0.22) deck.push({ p: [4, 3.34, z], s: [3.76, 0.05, 0.2] });
   for (let z = 2.16; z < 3.9; z += 0.22) deck.push({ p: [-2, 3.34, z], s: [7.76, 0.05, 0.2] });
@@ -390,8 +391,8 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
     false,
   );
   add(edge(0, 3.36, 0, 12.4, 8.4), M.coping, { layer: 'roof', vol: 'G', n: none, only: 2 });
-  add([{ p: [0, 3.4, 0.5], s: [13.5, 0.16, 9.7] }], M.roof, { layer: 'roof', vol: 'G', n: none, only: 1 });
-  add(edge(0, 3.4, 0.5, 13.5, 9.7), M.coping, { layer: 'roof', vol: 'G', n: none, only: 1 });
+  add([{ p: [0, 3.4, 0.5], s: [13.5, 0.16, 9.7] }], M.roof, { layer: 'roof', vol: 'G', n: none, only: 1, flat: true });
+  add(edge(0, 3.4, 0.5, 13.5, 9.7), M.coping, { layer: 'roof', vol: 'G', n: none, only: 1, flat: true });
 
   // services: heating loops in the floor, risers, a duct, conduits round the rooms
   const loops = (x0: number, x1: number, z0: number, z1: number, y: number): Box[] => {
@@ -467,9 +468,10 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
     return m;
   };
 
-  const extras = { pool: new THREE.Group(), porch: new THREE.Group(), garage: new THREE.Group(), solar: new THREE.Group(), wing: new THREE.Group() };
-  const roofGreen = extraMat(0x6f7f58, { roughness: 1, map: tex.fibre, bumpMap: tex.fibre, bumpScale: 2.5 }, 0.5);
-  const green: THREE.Mesh[] = [];
+  const extras = { pool: new THREE.Group(), porch: new THREE.Group(), garage: new THREE.Group(), wing: new THREE.Group() };
+  // roofs and solar panels of the configurator, per volume: all built once, shown by setConfig
+  type Pitched = { g: THREE.Group; panels: THREE.Object3D };
+  const roofs: { vol: 'G' | 'U'; mono: Pitched; gable: Pitched; flatSolar: THREE.Group }[] = [];
 
   if (!layers) {
     // the plot: a base like a presentation model's, lawn, a paved terrace, a path, trees
@@ -525,10 +527,6 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
       { p: [-9.4, 1.15, 1.63], s: [4.2, 2.3, 0.06], m: M.frame },
       { p: [-9.4, 0.02, 5.4], s: [4.4, 0.1, 7.4], m: paving },
     ]);
-    solid(
-      extras.solar,
-      Array.from({ length: 8 }, (_, i) => ({ p: [-4.4 + (i % 4) * 1.5, 6.66, -2.4 + Math.floor(i / 4) * 2.2] as [number, number, number], s: [1.3, 0.05, 1.9] as [number, number, number], m: dark })),
-    );
     // the wing of an L-shaped house: one storey, glazed to the garden
     solid(extras.wing, [
       { p: [3.2, 1.5, -7.6], s: [5.6, 3, 7.2], m: M.skin },
@@ -542,17 +540,149 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
       g.visible = false;
       root.add(g);
     }
-    // planted roofs: a second skin over each roof plane, shown when chosen
-    for (const [p, s, only] of [[[-2, 6.6, -0.7], [9.2, 0.05, 7.4], 2], [[0, 3.5, 0.5], [13.2, 0.05, 9.4], 1]] as const) {
-      const m = new THREE.Mesh(unit, roofGreen);
-      m.position.set(p[0], p[1], p[2]);
-      m.scale.set(s[0], s[1], s[2]);
-      m.receiveShadow = true;
-      m.userData.only = only;
+    /* —— pitched roofs: standing-seam metal over a wall that rises to meet it —— */
+    const roofMetal = extraMat(0x454b4e, { roughness: 0.52, metalness: 0.55, envMapIntensity: 0.9 });
+    const RT = 0.1; // roof sheet, compositional
+    const SEAM = 0.04;
+    const PITCH = { mono: 0.17, gable: 0.34 }; // rise per metre
+    const o3 = new THREE.Object3D();
+    const inst = (parent: THREE.Object3D, material: THREE.Material, n: number, place: (i: number) => void, shadow = true) => {
+      const mesh = new THREE.InstancedMesh(unit, material, n);
+      for (let i = 0; i < n; i++) {
+        o3.rotation.set(0, 0, 0);
+        place(i);
+        o3.updateMatrix();
+        mesh.setMatrixAt(i, o3.matrix);
+      }
+      mesh.castShadow = shadow;
+      mesh.receiveShadow = true;
+      parent.add(mesh);
+      return mesh;
+    };
+    /** a convex outline in (z, y), carried from x0 to x1 */
+    const prism = (pts: [number, number][], x0: number, x1: number) => {
+      const pos: number[] = [];
+      const c = new THREE.Vector3((x0 + x1) / 2, pts.reduce((q, p) => q + p[1], 0) / pts.length, pts.reduce((q, p) => q + p[0], 0) / pts.length);
+      const A = new THREE.Vector3();
+      const B = new THREE.Vector3();
+      const C = new THREE.Vector3();
+      const nrm = new THREE.Vector3();
+      const tri = (a: number[], b: number[], d: number[]) => {
+        A.fromArray(a);
+        B.fromArray(b);
+        C.fromArray(d);
+        nrm.subVectors(B, A).cross(C.clone().sub(A));
+        const outward = nrm.dot(A.clone().sub(c)) >= 0;
+        pos.push(...a, ...(outward ? b : d), ...(outward ? d : b));
+      };
+      const at = (x: number, i: number) => [x, pts[i][1], pts[i][0]];
+      const n = pts.length;
+      for (let i = 1; i < n - 1; i++) {
+        tri(at(x0, 0), at(x0, i), at(x0, i + 1));
+        tri(at(x1, 0), at(x1, i), at(x1, i + 1));
+      }
+      for (let i = 1; i < n; i++) {
+        // every side but the underside, which nothing sees
+        const j = (i + 1) % n;
+        tri(at(x0, i), at(x1, i), at(x1, j));
+        tri(at(x0, i), at(x1, j), at(x0, j));
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.computeVertexNormals();
+      disposables.push(geo);
+      return geo;
+    };
+    /** one slope, given the low and high ends of its underside as [z, y]; local z runs along the fall */
+    const slope = (g: THREE.Group, xa: number, xb: number, low: [number, number], high: [number, number], mitre: boolean) => {
+      const dir = Math.sign(low[0] - high[0]);
+      const run = Math.abs(low[0] - high[0]);
+      const rise = high[1] - low[1];
+      const len = Math.hypot(run, rise);
+      const p = Math.atan2(rise, run);
+      const pivot = new THREE.Group();
+      pivot.position.set((xa + xb) / 2, (low[1] + high[1]) / 2, (low[0] + high[0]) / 2);
+      pivot.rotation.x = dir * p;
+      const e = mitre ? RT * Math.tan(p) : 0; // so the two sheets of a gable meet at their top edges
+      const w = xb - xa;
+      solid(pivot, [{ p: [0, RT / 2, (-dir * e) / 2], s: [w, RT, len + e], m: roofMetal }]);
+      const n = Math.round(w / 0.6);
+      inst(pivot, roofMetal, n + 1, (i) => {
+        o3.position.set(-w / 2 + 0.02 + ((w - 0.04) * i) / n, RT + SEAM / 2, (-dir * e) / 2);
+        o3.scale.set(0.035, SEAM, len + e);
+      }, false);
+      g.add(pivot);
+      return pivot;
+    };
+    /** panels lying in a slope, a hand above the seams */
+    const panelsOn = (pivot: THREE.Group, cols: number, rows: number, sx: number, sz: number, dz = 0) => {
+      const m = inst(pivot, dark, cols * rows, (i) => {
+        o3.position.set((i % cols - (cols - 1) / 2) * (sx + 0.08), RT + SEAM + 0.03, dz + (Math.floor(i / cols) - (rows - 1) / 2) * (sz + 0.08));
+        o3.scale.set(sx, 0.04, sz);
+      });
       m.visible = false;
-      root.add(m);
-      green.push(m);
-    }
+      return m;
+    };
+    /** panels on a flat roof: two rows on low frames, tilted to the front */
+    const panelsFlat = (cx: number, cz: number, top: number) => {
+      const g = new THREE.Group();
+      const tilt = THREE.MathUtils.degToRad(10);
+      const half = 0.9;
+      const back = 0.05 + 2 * half * Math.sin(tilt);
+      inst(g, dark, 8, (i) => {
+        o3.position.set(cx + ((i % 4) - 1.5) * 1.23, top + 0.07 + half * Math.sin(tilt), cz + (Math.floor(i / 4) - 0.5) * 2.8);
+        o3.rotation.x = tilt;
+        o3.scale.set(1.15, 0.04, 2 * half);
+      });
+      inst(g, M.frame, 14, (i) => {
+        const z = cz + ((i % 2) - 0.5) * 2.8;
+        if (i < 4) {
+          // a rail under each edge of a row
+          const front = i < 2;
+          o3.position.set(cx, top + (front ? 0.025 : back - 0.02), z + (front ? 1 : -1) * (half * Math.cos(tilt) - 0.04));
+          o3.scale.set(4.84, front ? 0.05 : 0.04, 0.04);
+        } else {
+          o3.position.set(cx + (Math.floor((i - 4) / 2) - 2) * 1.21, top + back / 2 - 0.02, z - half * Math.cos(tilt) + 0.04);
+          o3.scale.set(0.04, back - 0.04, 0.04);
+        }
+      }, false);
+      g.visible = false;
+      root.add(g);
+      return g;
+    };
+    /** x0…z1: the outer face of the volume's walls; yb their top; ye where the roof springs from */
+    const pitched = (kind: 'mono' | 'gable', v: { x0: number; x1: number; z0: number; z1: number; yb: number; ye: number; wall: THREE.Material }): Pitched => {
+      const g = new THREE.Group();
+      const k = PITCH[kind];
+      const gable = kind === 'gable';
+      const zr = gable ? (v.z0 + v.z1) / 2 : v.z0;
+      const yr = v.ye + (v.z1 - zr) * k;
+      const wall = new THREE.Mesh(
+        prism(gable ? [[v.z0, v.yb], [v.z1, v.yb], [v.z1, v.ye], [zr, yr], [v.z0, v.ye]] : [[v.z0, v.yb], [v.z1, v.yb], [v.z1, v.ye], [v.z0, yr]], v.x0, v.x1),
+        v.wall,
+      );
+      wall.castShadow = wall.receiveShadow = true;
+      g.add(wall);
+      const side = 0.35;
+      const eave = 0.45;
+      const front = slope(g, v.x0 - side, v.x1 + side, [v.z1 + eave, v.ye - eave * k], gable ? [zr, yr] : [v.z0 - 0.3, yr + 0.3 * k], gable);
+      if (gable) {
+        slope(g, v.x0 - side, v.x1 + side, [v.z0 - eave, v.ye - eave * k], [zr, yr], true);
+        const apex = yr + RT * Math.hypot(1, k);
+        solid(g, [{ p: [(v.x0 + v.x1) / 2, apex + SEAM - 0.02, zr], s: [v.x1 - v.x0 + 2 * side + 0.04, 0.06, 0.3], m: M.coping }]);
+      }
+      g.visible = false;
+      root.add(g);
+      // lying down on a gable's shorter slope, upright on the long single one
+      return { g, panels: gable ? panelsOn(front, 4, 2, 1.8, 1.15) : panelsOn(front, 4, 2, 1.15, 1.8) };
+    };
+    const O = 0.25; // structure line to the face of the wall
+    const ground = { x0: G.x0 - O, x1: G.x1 + O, z0: G.z0 - O, z1: G.z1 + O, yb: G.h, ye: G.h + 0.36, wall: M.skin };
+    const upper = { x0: U.x0 - O, x1: U.x1 + O, z0: U.z0 - O, z1: U.z1 + O, yb: U.y + U.h, ye: U.y + U.h + 0.36, wall: M.skinU };
+    roofs.push(
+      { vol: 'G', mono: pitched('mono', ground), gable: pitched('gable', ground), flatSolar: panelsFlat(-1.4, 0.3, 3.48) },
+      { vol: 'U', mono: pitched('mono', upper), gable: pitched('gable', upper), flatSolar: panelsFlat(-2.15, -0.9, 6.58) },
+    );
   }
   scene.add(catcher);
 
@@ -572,8 +702,10 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
   const stone = new THREE.Color(0xf1e7d6);
   const wood = new THREE.Color(0xb98a58);
 
+  const roofKind = () => (!layers && (cfg.roof === 'mono' || cfg.roof === 'gable') ? cfg.roof : 'flat');
   const apply = () => {
     const t = st.t;
+    const sloped = roofKind() !== 'flat';
     // which way each layer leaves, and when: outermost first
     const f = ss(0.04, 0.3, t);
     const r = ss(0.14, 0.42, t);
@@ -597,7 +729,7 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
         grow = ss(0.25, 1, mine);
         vis *= mine;
       }
-      p.mesh.visible = vis > 0.015;
+      p.mesh.visible = vis > 0.015 && !(sloped && p.flat);
       p.mesh.scale.y = Math.max(grow, 0.001);
       p.mesh.position.set(p.n[0] * k, y + p.y0 * (1 - grow), p.n[1] * k);
     }
@@ -677,7 +809,7 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
       dirty = false;
       apply();
       // the shadow map only needs redrawing when something other than the camera has moved
-      const key = `${st.t.toFixed(4)}|${st.sys.toFixed(3)}|${st.floors.toFixed(3)}|${st.width.toFixed(3)}|${cfg.pool}${cfg.porch}${cfg.garage}${cfg.solar}${cfg.volume}`;
+      const key = `${st.t.toFixed(4)}|${st.sys.toFixed(3)}|${st.floors.toFixed(3)}|${st.width.toFixed(3)}|${cfg.pool}${cfg.porch}${cfg.garage}${cfg.solar}${cfg.volume}${cfg.roof}${cfg.floors}`;
       if (key !== shadowKey) {
         shadowKey = key;
         renderer.shadowMap.needsUpdate = true;
@@ -748,9 +880,16 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
       extras.pool.visible = cfg.pool;
       extras.porch.visible = cfg.porch;
       extras.garage.visible = cfg.garage;
-      extras.solar.visible = cfg.solar && cfg.floors === 2;
       extras.wing.visible = cfg.volume === 'L';
-      for (const g of green) g.visible = cfg.roof === 'green' && (g.userData.only === 2) === (cfg.floors === 2);
+      // the roof and its panels belong to the topmost volume
+      const kind = roofKind();
+      for (const r of roofs) {
+        const top = r.vol === (cfg.floors === 2 ? 'U' : 'G');
+        r.mono.g.visible = top && kind === 'mono';
+        r.gable.g.visible = top && kind === 'gable';
+        r.mono.panels.visible = r.gable.panels.visible = cfg.solar;
+        r.flatSolar.visible = cfg.solar && top && kind === 'flat';
+      }
       st.wideT = cfg.pool || cfg.garage || cfg.porch || cfg.volume === 'L' ? 1 : 0;
       wake();
     },
@@ -762,6 +901,7 @@ export async function createHouseScene(canvas: HTMLCanvasElement, opts: { mode: 
       if (!compiled) return null;
       // draw and read in the same task: the drawing buffer is only guaranteed until the browser composites
       apply();
+      renderer.shadowMap.needsUpdate = true;
       renderer.render(scene, camera);
       const flat = document.createElement('canvas');
       flat.width = canvas.width;

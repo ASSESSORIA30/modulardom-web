@@ -1,12 +1,11 @@
 'use client';
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HouseCanvas } from '@/components/house3d/HouseCanvas';
 import type { HouseConfig, HouseScene } from '@/components/house3d/scene';
 import { Lines } from '@/components/ui/Lines';
 import { Reveal } from '@/components/ui/Reveal';
-import { LeadForm } from '@/components/ui/LeadForm';
-import { href, type Dictionary, type Locale } from '@/content/i18n';
+import { BudgetActions, type Mode } from '@/components/ui/BudgetActions';
+import type { Dictionary, Locale } from '@/content/i18n';
 import { waHref } from '@/content/site';
 import type { EngineInput } from '@/lib/configurator/engine';
 
@@ -15,15 +14,18 @@ import type { EngineInput } from '@/lib/configurator/engine';
 
   Its questions are the ones ModularDom's own configurator asks today (surface, bedrooms,
   bathrooms, suite, kitchen, garage, climate, extras), so the answers map one to one onto the
-  company's budget engine (src/lib/configurator/engine.ts). Three more (system, façade, roof) and
-  the massing only change the model and are settled in the project.
+  company's budget engine (src/lib/configurator/engine.ts), now with floors and roof type, which
+  the engine prices too. Two more (system, façade) and the massing only change the model and are
+  settled in the project.
 
   Prices: the browser never holds a tariff or a formula. It sends the choices to /api/quote and
   shows what comes back; while prices are switched off on the server, that is nothing, and the
   page says the budget is prepared by ModularDom's team.
 
-  `full` (the /configurador page) adds the request form and the PDF dossier, and starts from the
-  choices carried in the link.
+  The same component is the home page's second screen and the /configurador page (`full` only
+  makes its title the page's h1). Both keep the choices for the session, and both let the visitor
+  download the budget or ask for a visit (src/components/ui/BudgetActions.tsx). A private link
+  (#r=<token>) brings a downloaded budget back.
 */
 
 const SURFACE = { min: 100, max: 400, step: 10, initial: 180 };
@@ -37,7 +39,16 @@ type State = {
   system: number; facade: number; roof: number;
 };
 /** what the server lets a visitor see of a budget (src/server/quote.ts) */
-type PublicQuote = { tariff: string; validDays: number; lines: { key: string; label: { ca: string; es: string }; detail?: { ca: string; es: string }; amountCents: number }[]; subtotalCents: number; vatWorksCents: number; vatArchitectCents: number; totalCents: number };
+type PublicQuote = {
+  tariff: string; validDays: number; hasPending: boolean;
+  lines: { key: string; label: { ca: string; es: string }; detail?: { ca: string; es: string }; amountCents: number; pending?: boolean }[];
+  subtotalCents: number; vatWorksCents: number; vatWorksPct: number; vatArchitectCents: number; vatArchitectPct: number; totalCents: number;
+};
+/** a budget brought back with its private link: what it was, and what the same choices cost today */
+type Recovered = { reference: string; createdAt: string; tariff: string; totalCents: number; pdf: boolean; current: { tariff: string; totalCents: number; sameTariff: boolean } | null };
+const STORE = 'md-config';
+const ROOF = ['flat', 'mono', 'gable'] as const;
+const COBERTA = ['plana', 'inclinada', 'dues_aigues'] as const;
 
 const INITIAL: State = { surface: SURFACE.initial, floors: 1, volume: 0, bedrooms: 3, bathrooms: 2, suite: 1, kitchen: 1, vehicles: 0, climate: [true, false], extras: [false, false, false, false], system: 0, facade: 0, roof: 0 };
 
@@ -107,36 +118,105 @@ const clampInt = (v: string | null, min: number, max: number, fallback: number) 
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
 
+/** the engine's and the model's vocabulary, back into the controls' own */
+function toState(v: State, cfg: Partial<EngineInput>, vis: Partial<{ floors: number; system: string; facade: string; roof: string; volume: string }>): State {
+  const num = (n: unknown, min: number, max: number, fallback: number) => (typeof n === 'number' && Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback);
+  const at = (list: readonly string[], k: unknown, fallback: number) => (typeof k === 'string' && list.includes(k) ? list.indexOf(k) : fallback);
+  const floors = vis.floors ?? cfg.plantes;
+  return {
+    ...v,
+    surface: Math.round(num(cfg.metres, SURFACE.min, SURFACE.max, v.surface) / SURFACE.step) * SURFACE.step,
+    bedrooms: num(cfg.habitacions, 1, 6, v.bedrooms),
+    bathrooms: num(cfg.banys, 1, 4, v.bathrooms),
+    suite: at(['sin', 'bano', 'bano_vestidor'], cfg.suite, v.suite),
+    kitchen: at(['basica', 'isla'], cfg.cuina, v.kitchen),
+    vehicles: num(cfg.vehicles, 0, 4, v.vehicles),
+    climate: Array.isArray(cfg.installacions) ? CLIMATE.map((k) => cfg.installacions!.includes(k)) : v.climate,
+    extras: Array.isArray(cfg.extres) ? [cfg.safareig === true, ...EXTRAS.map((k) => cfg.extres!.includes(k))] : v.extras,
+    floors: floors === 1 ? 0 : floors === 2 ? 1 : v.floors,
+    roof: cfg.coberta ? at(COBERTA, cfg.coberta, v.roof) : at(ROOF, vis.roof, v.roof),
+    system: at(['cellular', 'timber'], vis.system, v.system),
+    facade: at(['mineral', 'wood'], vis.facade, v.facade),
+    volume: at(['compact', 'L'], vis.volume, v.volume),
+  };
+}
+
 export function Configurator({ dict, lang, full = false }: { dict: Dictionary; lang: Locale; full?: boolean }) {
   const c = dict.configurator;
+  const b = dict.budget;
   const scene = useRef<HouseScene | null>(null);
+  const section = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(0);
   const [s, setS] = useState<State>(INITIAL);
   const [quote, setQuote] = useState<PublicQuote | null>(null);
-  const [dossier, setDossier] = useState<'idle' | 'busy' | 'error'>('idle');
-  const request = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<Mode>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [recovered, setRecovered] = useState<Recovered | 'invalid' | null>(null);
+  const [inView, setInView] = useState(false);
+  const loaded = useRef(false);
   const set = (patch: Partial<State>) => setS((v) => ({ ...v, ...patch }));
 
-  // arriving from the home page: start from the choices carried in the link
+  // where to start from: a private link (#r=…), an older link with the choices in the query, or this session's choices
   useEffect(() => {
-    if (!full) return;
+    const hash = /(?:^#|&)r=([0-9a-f]{64})(?:&|$)/.exec(location.hash);
     const q = new URLSearchParams(location.search);
-    if (![...q.keys()].length) return;
-    const list = (k: string) => (q.get(k) ?? '').split('-');
-    setS((v) => ({
-      ...v,
-      surface: Math.round(clampInt(q.get('metres'), SURFACE.min, SURFACE.max, v.surface) / SURFACE.step) * SURFACE.step,
-      bedrooms: clampInt(q.get('habitacions'), 1, 6, v.bedrooms),
-      bathrooms: clampInt(q.get('banys'), 1, 4, v.bathrooms),
-      suite: Math.max(0, ['sin', 'bano', 'bano_vestidor'].indexOf(q.get('suite') ?? '')) || (q.get('suite') === 'sin' ? 0 : v.suite),
-      kitchen: q.get('cuina') === 'basica' ? 0 : q.get('cuina') === 'isla' ? 1 : v.kitchen,
-      vehicles: clampInt(q.get('vehicles'), 0, 4, v.vehicles),
-      climate: q.has('installacions') ? CLIMATE.map((k) => list('installacions').includes(k)) : v.climate,
-      extras: q.has('extres') ? [q.get('safareig') === '1', ...EXTRAS.map((k) => list('extres').includes(k))] : v.extras,
-      floors: q.get('plantes') === '1' ? 0 : q.get('plantes') === '2' ? 1 : v.floors,
-      system: q.get('sistema') === 'timber' ? 1 : q.get('sistema') === 'cellular' ? 0 : v.system,
-    }));
+    if (full && hash) {
+      const t = hash[1];
+      // the token leaves the address bar at once: it is kept in memory, not in the history
+      history.replaceState(null, '', location.pathname + location.search);
+      fetch('/api/recover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t }) })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { config: Partial<EngineInput>; visual: Record<string, never>; original: Omit<Recovered, 'current'>; current: Recovered['current'] } | null) => {
+          if (!d) return setRecovered('invalid');
+          setS((v) => toState(v, d.config, d.visual));
+          setToken(t);
+          setRecovered({ ...d.original, current: d.current });
+        })
+        .catch(() => setRecovered('invalid'))
+        .finally(() => (loaded.current = true));
+      return;
+    }
+    if (full && q.has('metres')) {
+      const list = (k: string) => (q.get(k) ?? '').split('-');
+      const n = (k: string) => (q.has(k) ? parseInt(q.get(k)!, 10) : undefined);
+      setS((v) =>
+        toState(
+          v,
+          {
+            metres: n('metres'), habitacions: n('habitacions'), banys: n('banys'), suite: q.get('suite') as EngineInput['suite'], cuina: q.get('cuina') as EngineInput['cuina'], vehicles: n('vehicles'),
+            ...(q.has('installacions') ? { installacions: list('installacions') } : {}),
+            ...(q.has('extres') ? { extres: list('extres'), safareig: q.get('safareig') === '1' } : {}),
+          },
+          { floors: n('plantes'), system: q.get('sistema') ?? undefined },
+        ),
+      );
+    } else {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(STORE) ?? 'null') as State | null;
+        if (saved && typeof saved.surface === 'number' && Array.isArray(saved.extras) && saved.extras.length === INITIAL.extras.length) setS({ ...INITIAL, ...saved, roof: Math.min(2, saved.roof ?? 0) });
+      } catch {
+        /* no storage: start from the defaults */
+      }
+    }
+    loaded.current = true;
   }, [full]);
+  // the choices stay for the session, across the home page and the configurator page
+  useEffect(() => {
+    if (!loaded.current) return;
+    try {
+      sessionStorage.setItem(STORE, JSON.stringify(s));
+    } catch {
+      /* see above */
+    }
+  }, [s]);
+  // a phone gets the total and the download button at the thumb while this section is on screen
+  useEffect(() => {
+    const el = section.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: '-35% 0px -35% 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   // the same answers, three ways: for the model, for the budget engine, for the link
   const model = useMemo(
@@ -146,7 +226,7 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
       system: s.system === 1 ? 'timber' : 'cellular',
       finish: s.facade === 1 ? 'wood' : 'mineral',
       volume: s.volume === 1 ? 'L' : 'compact',
-      roof: s.roof === 1 ? 'green' : 'flat',
+      roof: ROOF[s.roof] ?? 'flat',
       pool: s.extras[1],
       porch: s.extras[2],
       solar: s.extras[3],
@@ -165,6 +245,8 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
       safareig: s.extras[0],
       installacions: CLIMATE.filter((_, i) => s.climate[i]),
       extres: EXTRAS.filter((_, i) => s.extras[i + 1]),
+      plantes: s.floors === 0 ? 1 : 2,
+      coberta: COBERTA[s.roof] ?? 'plana',
     }),
     [s],
   );
@@ -187,32 +269,6 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
       ctl.abort();
     };
   }, [input]);
-
-  const download = async () => {
-    setDossier('busy');
-    try {
-      const res = await fetch('/api/dossier', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // if the visitor has already typed who they are, the dossier is made out to them
-        body: JSON.stringify({
-          lang, config: input, visual, image: scene.current?.snapshot() ?? null,
-          name: request.current?.querySelector<HTMLInputElement>('input[name=name]')?.value || null,
-          city: request.current?.querySelector<HTMLInputElement>('input[name=city]')?.value || null,
-        }),
-      });
-      if (!res.ok) throw new Error();
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ModularDom-${res.headers.get('X-Reference') ?? 'dossier'}.pdf`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      setDossier('idle');
-    } catch {
-      setDossier('error');
-    }
-  };
 
   useEffect(() => {
     scene.current?.setConfig(model);
@@ -244,7 +300,7 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
   const groups: { label: string; value: string; body: React.ReactNode }[] = [
     {
       label: c.groups.house,
-      value: `${s.surface} ${c.surface.unit} · ${c.floors.options[s.floors]}`,
+      value: `${s.surface} ${c.surface.unit} · ${c.floors.options[s.floors]} · ${c.roof.options[s.roof]}`,
       body: (
         <>
           <Field label={c.surface.label}>
@@ -275,6 +331,10 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
           <Field label={c.volume.label}>
             <Options {...c.volume} value={s.volume} onChange={(i) => set({ volume: i })} />
           </Field>
+          <Field label={c.roof.label}>
+            <Options {...c.roof} value={s.roof} onChange={(i) => set({ roof: i })} />
+          </Field>
+          <p className="t-note pb-1 pt-1 text-paper/70">{b.roofHint}</p>
         </>
       ),
     },
@@ -326,32 +386,16 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
           <Field label={c.facade.label}>
             <Options {...c.facade} value={s.facade} onChange={(i) => set({ facade: i })} />
           </Field>
-          <Field label={c.roof.label}>
-            <Options {...c.roof} value={s.roof} onChange={(i) => set({ roof: i })} />
-          </Field>
           <p className="t-note pb-1 pt-2 text-paper/70">{c.visualNote}</p>
         </>
       ),
     },
   ];
 
-  const q = new URLSearchParams({
-    metres: String(input.metres),
-    habitacions: String(input.habitacions),
-    banys: String(input.banys),
-    suite: input.suite,
-    cuina: input.cuina,
-    vehicles: String(input.vehicles),
-    safareig: input.safareig ? '1' : '0',
-    installacions: input.installacions.join('-'),
-    extres: input.extres.join('-'),
-    plantes: String(s.floors + 1),
-    sistema: model.system!,
-  });
   const money = (cents: number) => new Intl.NumberFormat(lang === 'ca' ? 'ca-ES' : 'es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100);
 
   return (
-    <section className="bg-ink text-paper" data-theme="dark" aria-labelledby="configurador">
+    <section ref={section} className="bg-ink text-paper" data-theme="dark" data-dock-off aria-labelledby="configurador">
       <div className="grid md:min-h-[100svh] md:grid-cols-12">
         {/* the stage: a studio floor of light, the model on its base */}
         <div className="relative h-[48svh] overflow-hidden md:sticky md:top-0 md:col-span-7 md:h-[100svh]">
@@ -383,7 +427,27 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
             </p>
           </Reveal>
 
-          <ol className="mt-10">
+          {/* the total stays in sight while the options scroll (a phone has it in the bar at the bottom) */}
+          {quote && (
+            <div className="sticky top-[4.5rem] z-10 -mx-3 mt-8 flex items-center justify-between gap-4 border-y border-paper/20 bg-ink/95 px-3 py-3 backdrop-blur max-md:hidden" data-testid="budget-strip">
+              <p className="leading-tight">
+                <span className="block text-[0.6875rem] uppercase tracking-[0.08em] text-paper/65">{b.total}</span>
+                <span className="t-serif t-num text-[1.6rem]">{money(quote.totalCents)}</span>
+              </p>
+              <button
+                type="button"
+                className="btn btn-sm btn-paper shrink-0"
+                onClick={() => {
+                  setMode('download');
+                  requestAnimationFrame(() => document.getElementById('pressupost-accions')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+                }}
+              >
+                {b.download}
+              </button>
+            </div>
+          )}
+
+          <ol className={quote ? 'mt-10 md:mt-4' : 'mt-10'}>
             {groups.map((g, i) => {
               const on = open === i;
               return (
@@ -411,15 +475,18 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
               <dl className="mt-3 text-[0.9375rem]">
                 {quote.lines.map((l) => (
                   <div key={l.key} className="flex justify-between gap-6 border-t border-paper/15 py-2">
-                    <dt className="text-paper/80">{l.label[lang]}</dt>
-                    <dd className="t-num">{money(l.amountCents)}</dd>
+                    <dt className="text-paper/80">
+                      {l.label[lang]}
+                      {l.detail && <span className="block text-[0.8125rem] text-paper/60">{l.detail[lang]}</span>}
+                    </dt>
+                    <dd className={l.pending ? 'text-right text-[0.8125rem] italic text-gold-light' : 't-num'}>{l.pending ? b.pending : money(l.amountCents)}</dd>
                   </div>
                 ))}
                 {(
                   [
                     [c.quote.subtotal, quote.subtotalCents],
-                    [c.quote.vatWorks, quote.vatWorksCents],
-                    [c.quote.vatArch, quote.vatArchitectCents],
+                    [`${c.quote.vatWorks} (${String(quote.vatWorksPct).replace('.', ',')} %)`, quote.vatWorksCents],
+                    [`${c.quote.vatArch} (${String(quote.vatArchitectPct).replace('.', ',')} %)`, quote.vatArchitectCents],
                   ] as const
                 ).map(([k, v]) => (
                   <div key={k} className="flex justify-between gap-6 border-t border-paper/15 py-2 text-paper/80">
@@ -428,54 +495,93 @@ export function Configurator({ dict, lang, full = false }: { dict: Dictionary; l
                   </div>
                 ))}
                 <div className="flex items-baseline justify-between gap-6 border-y border-paper/40 py-3">
-                  <dt className="font-medium">{c.quote.total}</dt>
-                  <dd className="t-serif t-num text-[1.9rem] leading-none">{money(quote.totalCents)}</dd>
+                  <dt className="font-medium">{b.total}</dt>
+                  <dd className="t-serif t-num text-[1.9rem] leading-none" data-testid="budget-total">{money(quote.totalCents)}</dd>
                 </div>
               </dl>
+              {quote.hasPending && <p className="t-note mt-3 max-w-[44ch] text-gold-light">{b.pendingNote}</p>}
               <p className="t-note mt-3 max-w-[44ch] text-paper/70">{c.quote.note}</p>
             </div>
           ) : (
             <p className="t-note mt-6 max-w-[40ch] text-paper/70">{c.noPrice}</p>
           )}
-          {!full && (
-            <Link href={href(lang, 'configurator', `?${q}`)} className="btn btn-paper mt-6">
-              {c.send}
-            </Link>
-          )}
-
-          {full && (
-            <div ref={request} className="mt-12 border-t border-paper/20 pt-10">
-              <h3 className="t-serif text-[clamp(1.6rem,1.2rem+1.4vw,2.2rem)] leading-tight">{dict.request.title}</h3>
-              <p className="mt-3 max-w-[40ch] text-paper/75">{dict.request.text}</p>
-              <LeadForm
-                kind="quote"
-                dict={dict}
-                lang={lang}
-                fields={['phone', 'city', 'plot', 'message']}
-                required={['phone']}
-                extra={() => ({ config: input, visual })}
-                submit={dict.request.submit}
-                buttonClass="btn btn-paper"
-                chipOn="border-paper bg-paper text-ink"
-                chipOff="border-paper/30 hover:border-paper"
-                className="mt-8"
-              />
-              <div className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-2 border-t border-paper/20 pt-6">
-                <button type="button" onClick={download} disabled={dossier === 'busy'} className="btn btn-line disabled:opacity-60">
-                  {dossier === 'busy' ? dict.request.preparing : dict.request.dossier}
-                </button>
-                {waHref(dict.whatsapp.configurator) && (
-                  <a href={waHref(dict.whatsapp.configurator)!} target="_blank" rel="noopener noreferrer" className="link text-[0.9375rem]">
-                    {dict.ui.whatsapp}
-                  </a>
-                )}
-                <p role="status" className="t-note w-full text-paper/80">
-                  {dossier === 'error' ? dict.request.dossierError : ''}
-                </p>
-              </div>
+          {recovered && (
+            <div className="mt-6 border border-paper/25 p-4 text-[0.9375rem]" data-testid="budget-recovered" aria-live="polite">
+              {recovered === 'invalid' ? (
+                <p>{b.recoverFail}</p>
+              ) : (
+                <>
+                  <p className="font-medium">{b.recovered.replace('{ref}', recovered.reference).replace('{date}', new Intl.DateTimeFormat(lang === 'ca' ? 'ca-ES' : 'es-ES', { dateStyle: 'long' }).format(new Date(recovered.createdAt)))}</p>
+                  <dl className="mt-3">
+                    <div className="flex justify-between gap-6 border-t border-paper/15 py-2">
+                      <dt className="text-paper/80">{b.original.replace('{n}', recovered.tariff)}</dt>
+                      <dd className="t-num" data-testid="recovered-original">{money(recovered.totalCents)}</dd>
+                    </div>
+                    {recovered.current && (
+                      <div className="flex justify-between gap-6 border-t border-paper/15 py-2">
+                        <dt className="text-paper/80">
+                          {b.current}
+                          {recovered.current.sameTariff && <span className="block text-[0.8125rem] text-paper/60">{b.sameTariff}</span>}
+                        </dt>
+                        <dd className="t-num" data-testid="recovered-current">{money(recovered.current.totalCents)}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  {recovered.pdf && token && (
+                    <button
+                      type="button"
+                      className="link mt-3 text-[0.9375rem]"
+                      onClick={async () => {
+                        const res = await fetch('/api/recover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, pdf: true }) });
+                        if (!res.ok) return;
+                        const url = URL.createObjectURL(await res.blob());
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `ModularDom-${recovered.reference}.pdf`;
+                        a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+                      }}
+                    >
+                      {b.originalPdf}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           )}
+
+          <BudgetActions
+            dict={dict} lang={lang} payload={() => ({ config: input, visual })} snapshot={() => scene.current?.snapshot() ?? null}
+            canPrice={!!quote} mode={mode} setMode={setMode} token={token} setToken={setToken}
+          />
+          {waHref(dict.whatsapp.configurator) && (
+            <a href={waHref(dict.whatsapp.configurator)!} target="_blank" rel="noopener noreferrer" className="link mt-4 inline-block text-[0.9375rem]">
+              {dict.ui.whatsapp}
+            </a>
+          )}
         </div>
+      </div>
+
+      {/* phone: the total and the download button stay at the thumb while the configurator is on screen */}
+      <div
+        className={`glass fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-paper/10 bg-ink/85 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 text-paper backdrop-blur-xl transition-transform duration-500 ease-[var(--ease-drawer)] md:hidden ${inView && quote && !mode ? '' : 'translate-y-full'}`}
+        inert={!(inView && quote && !mode)}
+        data-testid="budget-bar"
+      >
+        <p className="min-w-0 leading-tight">
+          <span className="block text-[0.6875rem] uppercase tracking-[0.08em] text-paper/65">{b.total}</span>
+          <span className="t-serif t-num text-[1.35rem]">{quote ? money(quote.totalCents) : ''}</span>
+        </p>
+        <button
+          type="button"
+          className="btn btn-sm btn-paper shrink-0"
+          onClick={() => {
+            setMode('download');
+            requestAnimationFrame(() => document.getElementById('pressupost-accions')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+          }}
+        >
+          {b.download}
+        </button>
       </div>
     </section>
   );

@@ -52,8 +52,9 @@ export const PRIVACY_POLICY = { published: false };
 export const waHref = (message: string) => (WHATSAPP.enabled && WHATSAPP.number ? `https://wa.me/${WHATSAPP.number}?text=${encodeURIComponent(message)}` : null);
 
 /*
-  The closing picture: the definitive night view (media/03-mansio-nocturna.png, 1670 px wide as
-  supplied; a larger original would be sharper on big screens). `standIn: true` would grade a
-  daytime frame towards night in CSS instead.
+  The closing picture ("visit the show house"): the photograph ModularDom used on its previous
+  site (media/casa-pilot-baixa.jpeg, 700 × 467 px as supplied: a larger original would be much
+  sharper full-bleed). The earlier night view stays in public/stills as `closing`.
+  `standIn: true` would grade a daytime frame towards night in CSS instead.
 */
-export const CLOSING = { still: 'closing', standIn: false };
+export const CLOSING = { still: 'casa-pilot', standIn: false };

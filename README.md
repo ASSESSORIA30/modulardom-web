@@ -38,13 +38,19 @@ Memòria de qualitats: text publicat al configurador actual. Paleta: blau marí,
 Logotip: l'únic fitxer publicat és un PNG de 200 px (`public/brand/`), usat a la icona i al peu.
 Els «proyectos realizados» de la web actual semblen renders i **no** s'utilitzen com a obres reals.
 
-## Configurador, pressupost, formularis i dossier
+## Configurador, pressupost i formularis
 
 - Pàgines pròpies: `/configurador`, `/projectes` (`/es/proyectos`), `/mineral`, `/contacte` (`/es/contacto`).
 - Les preguntes són les del configurador actual de ModularDom; `src/lib/configurator/engine.ts` és el seu
   motor, portat línia per línia i provat contra l'original (`tests/engine.test.ts`).
 - **Cap preu al repositori ni al navegador.** El servidor llegeix la tarifa del CRM i `POST /api/quote`
-  només retorna imports finals. `POST /api/lead` valida, filtra spam i signa; `POST /api/dossier` fa el PDF.
+  només retorna imports finals. `POST /api/lead` valida, filtra spam i signa.
+- El configurador és també la segona pantalla de la portada. «Descarregar pressupost» (`POST /api/budget`)
+  valida, recalcula al servidor, registra client i pressupost al CRM, genera el PDF (`src/server/dossier.ts`),
+  el desa al CRM i només llavors el lliura. `POST /api/recover` torna a un pressupost amb el seu enllaç
+  privat (`#r=<token>`); `POST /api/quote-visit` demana la visita a la casa pilot des d'un pressupost.
+- Cobertes: plana (estàndard), inclinada d'una aigua i a dues aigües, per m² de coberta. Preus, pendents,
+  voladís i proporció són a la tarifa del CRM; sense ells, la partida surt «pendent de valorar».
 - Tot està apagat per defecte. Com s'activa: `docs/operations.md`. Contracte amb el CRM: `docs/crm-integration.md`.
 
 ## Interruptors de contingut (`src/content/site.ts`)
