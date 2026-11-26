@@ -48,12 +48,18 @@ A producció, a més, cal la política de privacitat publicada (vegeu a sota). L
 
 ## Privacitat
 
-La pàgina de la política de privacitat encara és buida («Estem preparant aquesta pàgina»).
-Mentre `PRIVACY_POLICY.published` sigui `false` a `src/content/site.ts`, **producció no envia cap
-formulari al CRM**, encara que les variables estiguin posades. Les previsualitzacions sí, per
-poder fer la validació amb dades fictícies.
+Les pàgines de privacitat, avís legal i galetes són a `src/content/legal.ts` (CA/ES), accessibles
+al peu i als formularis. Mentre `PRIVACY_POLICY.published` sigui `false` a `src/content/site.ts`,
+**producció no envia cap formulari al CRM**, encara que les variables estiguin posades. Les
+previsualitzacions sí, amb dades fictícies. Abans d'activar l'interruptor, direcció ha de validar
+els textos, els contractes d'encàrrec amb Vercel i Supabase, els mecanismes de transferència,
+els criteris de conservació i el procediment d'exercici de drets i supressió. Verificar també
+els accessos dels rols i el comportament real de galetes/emmagatzematge al domini final.
+No activar Analytics, píxels ni altres tecnologies no necessàries fins que hi hagi un gestor
+que bloquegi aquestes tecnologies abans del consentiment, amb acceptació i rebuig equivalents.
+Fonts: BORME-A-2026-62-25 (31/03/2026), RGPD art. 13, LSSI art. 10 i 22 i Guia de galetes AEPD.
 
 ## Recursos pendents del client
 
 Logotip vectorial · fotografies d'obres reals · models MINERAL ·
-text de la política de privacitat · adreça postal si s'ha de publicar.
+validació dels textos legals i dels tractaments efectius abans de l'activació a producció.

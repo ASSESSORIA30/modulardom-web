@@ -7,7 +7,7 @@ import { LeadForm } from '@/components/ui/LeadForm';
 import { Lines } from '@/components/ui/Lines';
 import { Reveal } from '@/components/ui/Reveal';
 import { Still } from '@/components/ui/Still';
-import { MENU, href, type Dictionary, type Locale } from '@/content/i18n';
+import { LEGAL_KEYS, MENU, href, type Dictionary, type Locale } from '@/content/i18n';
 import { CLIENT_AREA, CLOSING, COMPANY, LOGO, waHref } from '@/content/site';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -168,9 +168,11 @@ export function Footer({ dict, lang }: Props) {
           </p>
           <p>{COMPANY.region}</p>
           <p>{dict.ui.rights}</p>
-          <Link href={href(lang, 'privacy')} className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-paper">
-            {dict.footer.legal}
-          </Link>
+          {LEGAL_KEYS.map((key) => (
+            <Link key={key} href={href(lang, key)} className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-paper">
+              {dict.nav[key]}
+            </Link>
+          ))}
         </div>
       </div>
     </footer>

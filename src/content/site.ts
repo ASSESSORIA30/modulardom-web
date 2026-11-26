@@ -42,9 +42,10 @@ export const WHATSAPP: { enabled: boolean; number: string | null } = { enabled: 
 export const CLIENT_AREA: { enabled: boolean; url: string } = { enabled: false, url: 'https://crmmodulardom.vercel.app/portal' };
 
 /*
-  The privacy policy page is still a placeholder: the text has to come from ModularDom. Until it is
-  published here, production does not send any form to the CRM, whatever the server variables say
-  (src/server/env.ts). Preview deployments, which only ever see test data, are not held back.
+  The legal pages are drafted in src/content/legal.ts. The release gate remains off until the
+  controller has validated the actual processors, retention and transfer safeguards, and the
+  legal texts. Production cannot send forms to the CRM until this is explicitly approved.
+  Protected previews can use fictitious data for end-to-end tests.
 */
 export const PRIVACY_POLICY = { published: false };
 

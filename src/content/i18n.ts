@@ -14,11 +14,16 @@ export const NAV = [
   { key: 'contact', slug: { ca: 'contacte', es: 'contacto' } },
   { key: 'clients', slug: { ca: 'area-de-clients', es: 'area-de-clientes' } },
   { key: 'privacy', slug: { ca: 'privacitat', es: 'privacidad' } },
+  { key: 'legal', slug: { ca: 'avis-legal', es: 'aviso-legal' } },
+  { key: 'cookies', slug: { ca: 'galetes', es: 'cookies' } },
 ] as const;
 /** pages with their own file under app/[lang]/ (the folder is the Catalan slug); the rest share the holding page */
 export const BUILT: readonly string[] = ['projects', 'configurator', 'mineral', 'contact'];
-/** shown in menus (privacy lives in the footer line) */
-export const MENU = NAV.filter((n) => n.key !== 'privacy');
+/** Legal information lives in the footer, not the commercial menu. */
+export const LEGAL_KEYS = ['privacy', 'legal', 'cookies'] as const;
+export type LegalKey = (typeof LEGAL_KEYS)[number];
+export const isLegalKey = (key: string): key is LegalKey => (LEGAL_KEYS as readonly string[]).includes(key);
+export const MENU = NAV.filter((n) => !isLegalKey(n.key));
 export const href = (lang: Locale, key: NavKey, query = '') => `/${lang}/${NAV.find((n) => n.key === key)!.slug[lang]}${query}`;
 export type NavKey = (typeof NAV)[number]['key'];
 
@@ -80,7 +85,7 @@ export type Dictionary = {
   seo: Record<NavKey, string>;
   forms: {
     name: string; email: string; phone: string; city: string; company: string; message: string;
-    plot: Choice; plotNote: string; consent: string; privacy: string;
+    plot: Choice; plotNote: string; consent: string; privacy: string; privacyInfo: string;
     required: string; invalidEmail: string; invalidPhone: string; needConsent: string;
     sending: string; sent: string; notSent: string; error: string; rate: string;
   };
@@ -109,7 +114,7 @@ const ca: Dictionary = {
   },
   nav: {
     homes: 'Cases a mida', projects: 'Projectes', systems: 'Sistemes constructius', configurator: 'Configurador',
-    mineral: 'ModularDom MINERAL', process: 'Com treballem', about: 'Qui som', contact: 'Contacte', clients: 'Àrea de clients', privacy: 'Privacitat',
+    mineral: 'ModularDom MINERAL', process: 'Com treballem', about: 'Qui som', contact: 'Contacte', clients: 'Àrea de clients', privacy: 'Privacitat', legal: 'Avís legal', cookies: 'Política de galetes',
   },
   ui: {
     menu: 'Menú', close: 'Tanca', skip: 'Vés al contingut', language: 'Idioma', tour: 'Recorregut per la casa',
@@ -253,14 +258,15 @@ const ca: Dictionary = {
     about: 'Qui és ModularDom.',
     contact: 'Contacta amb ModularDom o reserva una visita a la casa pilot de Bellvís (Lleida).',
     clients: 'Accés a l’àrea de clients de ModularDom.',
-    privacy: 'Política de privacitat de ModularDom.',
+    privacy: 'Política de privacitat de ModularDom.', legal: 'Dades identificatives i condicions d’ús de ModularDom.', cookies: 'Informació sobre galetes i emmagatzematge tècnic de ModularDom.',
   },
   forms: {
     name: 'Nom i cognoms', email: 'Correu electrònic', phone: 'Telèfon', city: 'Municipi', company: 'Empresa', message: 'Observacions',
     plot: { label: 'Terreny', options: ['Ja en tinc', 'Encara no', 'En busco'] },
     plotNote: 'On és el terreny? (opcional)',
-    consent: 'He llegit i accepto la', privacy: 'política de privacitat',
-    required: 'Cal omplir aquest camp.', invalidEmail: 'Aquest correu no sembla correcte.', invalidPhone: 'Cal un telèfon de 9 xifres com a mínim.', needConsent: 'Cal acceptar la política de privacitat.',
+    consent: 'He llegit la', privacy: 'política de privacitat',
+    privacyInfo: 'Responsable: MODULARDOM OBRAS Y REFORMAS, S.L. Finalitat: atendre la teva sol·licitud, pressupost o visita. Base: mesures precontractuals o interès legítim, segons la consulta. Pots exercir els drets a info@modulardom.com. Més informació a la política de privacitat.',
+    required: 'Cal omplir aquest camp.', invalidEmail: 'Aquest correu no sembla correcte.', invalidPhone: 'Cal un telèfon de 9 xifres com a mínim.', needConsent: 'Cal confirmar que has llegit la política de privacitat.',
     sending: 'Enviant…',
     sent: 'Sol·licitud rebuda. Referència: {ref}.',
     notSent: 'Ara mateix la web encara no pot rebre sol·licituds i no s’ha enviat res. Escriu-nos a {email} o truca’ns al {phone}.',
@@ -274,7 +280,7 @@ const ca: Dictionary = {
     formTitle: 'A nom de qui fem el pressupost?', formText: 'El descarregaràs a l’instant, en PDF. No cal crear cap compte.',
     visitTitle: 'Reserva una visita a la casa pilot', visitText: 'Deixa’ns les teves dades i et trucarem per confirmar dia i hora.',
     city: 'Municipi on vols construir', optional: 'opcional',
-    privacyNote: 'Farem servir aquestes dades només per atendre aquesta sol·licitud. Descarregar el pressupost no t’apunta a cap comunicació comercial.',
+    privacyNote: 'Responsable: MODULARDOM OBRAS Y REFORMAS, S.L. Tractem les dades per elaborar i gestionar el pressupost o la visita (mesures precontractuals), inclòs el seguiment de la sol·licitud al CRM. Drets: info@modulardom.com. No et subscrivim a publicitat. Les dades es poden recordar durant la sessió.',
     submitDownload: 'Descarregar pressupost', submitVisit: 'Sol·licitar la visita', preparing: 'Preparant el pressupost…', sending: 'Enviant…', close: 'Tanca',
     done: 'Pressupost descarregat. Referència: {ref}.', reissued: 'És el mateix pressupost que ja tenies: conserva la referència {ref}.',
     recoverTitle: 'El teu enllaç privat', recoverText: 'Desa’l per tornar a aquest pressupost durant {days} dies, canviar opcions i generar-ne un d’actualitzat. No conté cap dada personal.',
@@ -312,7 +318,7 @@ const es: Dictionary = {
   },
   nav: {
     homes: 'Casas a medida', projects: 'Proyectos', systems: 'Sistemas constructivos', configurator: 'Configurador',
-    mineral: 'ModularDom MINERAL', process: 'Cómo trabajamos', about: 'Quiénes somos', contact: 'Contacto', clients: 'Área de clientes', privacy: 'Privacidad',
+    mineral: 'ModularDom MINERAL', process: 'Cómo trabajamos', about: 'Quiénes somos', contact: 'Contacto', clients: 'Área de clientes', privacy: 'Privacidad', legal: 'Aviso legal', cookies: 'Política de cookies',
   },
   ui: {
     menu: 'Menú', close: 'Cerrar', skip: 'Ir al contenido', language: 'Idioma', tour: 'Recorrido por la casa',
@@ -456,14 +462,15 @@ const es: Dictionary = {
     about: 'Quién es ModularDom.',
     contact: 'Contacta con ModularDom o reserva una visita a la casa piloto de Bellvís (Lleida).',
     clients: 'Acceso al área de clientes de ModularDom.',
-    privacy: 'Política de privacidad de ModularDom.',
+    privacy: 'Política de privacidad de ModularDom.', legal: 'Datos identificativos y condiciones de uso de ModularDom.', cookies: 'Información sobre cookies y almacenamiento técnico de ModularDom.',
   },
   forms: {
     name: 'Nombre y apellidos', email: 'Correo electrónico', phone: 'Teléfono', city: 'Municipio', company: 'Empresa', message: 'Observaciones',
     plot: { label: 'Terreno', options: ['Ya tengo', 'Aún no', 'Estoy buscando'] },
     plotNote: '¿Dónde está el terreno? (opcional)',
-    consent: 'He leído y acepto la', privacy: 'política de privacidad',
-    required: 'Hay que rellenar este campo.', invalidEmail: 'Este correo no parece correcto.', invalidPhone: 'Hace falta un teléfono de 9 cifras como mínimo.', needConsent: 'Hay que aceptar la política de privacidad.',
+    consent: 'He leído la', privacy: 'política de privacidad',
+    privacyInfo: 'Responsable: MODULARDOM OBRAS Y REFORMAS, S.L. Finalidad: atender tu solicitud, presupuesto o visita. Base: medidas precontractuales o interés legítimo, según la consulta. Puedes ejercer tus derechos en info@modulardom.com. Más información en la política de privacidad.',
+    required: 'Hay que rellenar este campo.', invalidEmail: 'Este correo no parece correcto.', invalidPhone: 'Hace falta un teléfono de 9 cifras como mínimo.', needConsent: 'Hay que confirmar que has leído la política de privacidad.',
     sending: 'Enviando…',
     sent: 'Solicitud recibida. Referencia: {ref}.',
     notSent: 'Ahora mismo la web aún no puede recibir solicitudes y no se ha enviado nada. Escríbenos a {email} o llámanos al {phone}.',
@@ -477,7 +484,7 @@ const es: Dictionary = {
     formTitle: '¿A nombre de quién hacemos el presupuesto?', formText: 'Lo descargarás al instante, en PDF. No hace falta crear ninguna cuenta.',
     visitTitle: 'Reserva una visita a la casa piloto', visitText: 'Déjanos tus datos y te llamaremos para confirmar día y hora.',
     city: 'Municipio donde quieres construir', optional: 'opcional',
-    privacyNote: 'Usaremos estos datos solo para atender esta solicitud. Descargar el presupuesto no te apunta a ninguna comunicación comercial.',
+    privacyNote: 'Responsable: MODULARDOM OBRAS Y REFORMAS, S.L. Tratamos los datos para elaborar y gestionar el presupuesto o la visita (medidas precontractuales), incluido el seguimiento de la solicitud en el CRM. Derechos: info@modulardom.com. No te suscribimos a publicidad. Los datos pueden recordarse durante la sesión.',
     submitDownload: 'Descargar presupuesto', submitVisit: 'Solicitar la visita', preparing: 'Preparando el presupuesto…', sending: 'Enviando…', close: 'Cerrar',
     done: 'Presupuesto descargado. Referencia: {ref}.', reissued: 'Es el mismo presupuesto que ya tenías: conserva la referencia {ref}.',
     recoverTitle: 'Tu enlace privado', recoverText: 'Guárdalo para volver a este presupuesto durante {days} días, cambiar opciones y generar uno actualizado. No contiene ningún dato personal.',

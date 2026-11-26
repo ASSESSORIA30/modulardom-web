@@ -70,9 +70,11 @@ export function BudgetActions({
     started.current = Date.now();
     try {
       const saved = JSON.parse(sessionStorage.getItem(STORE) ?? 'null') as (Contact & { consent?: boolean }) | null;
-      if (saved && typeof saved.name === 'string') {
+      if (saved && saved.consent === true && typeof saved.name === 'string') {
         setC({ ...EMPTY, ...saved });
-        setConsent(saved.consent === true);
+        setConsent(true);
+      } else {
+        sessionStorage.removeItem(STORE);
       }
     } catch {
       /* a private window without storage: the form simply starts empty */
@@ -80,7 +82,8 @@ export function BudgetActions({
   }, []);
   const remember = (next: Contact, ok = consent) => {
     try {
-      sessionStorage.setItem(STORE, JSON.stringify({ ...next, consent: ok }));
+      if (ok) sessionStorage.setItem(STORE, JSON.stringify({ ...next, consent: true }));
+      else sessionStorage.removeItem(STORE);
     } catch {
       /* see above */
     }

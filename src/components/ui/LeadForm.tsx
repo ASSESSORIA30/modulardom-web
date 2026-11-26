@@ -166,6 +166,7 @@ export function LeadForm({ kind, dict, lang, fields, required = [], extra, submi
             {errors.consent}
           </p>
         )}
+        <p className="mt-3 max-w-[52ch] text-xs leading-relaxed opacity-75">{f.privacyInfo}</p>
         <button type="submit" disabled={status.kind === 'sending'} className={`${buttonClass} mt-6 disabled:opacity-60`}>
           {status.kind === 'sending' ? f.sending : submit}
         </button>
