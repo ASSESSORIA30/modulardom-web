@@ -11,9 +11,12 @@ import { phoneDigits, type LeadInput } from './validate';
   post it; docs/crm-integration.md is the contract the CRM side needs to implement. Field names
   follow the CRM's own model (clients, projects, quote_versions.configurator_input).
 
-  Duplicates: the same person sending the same kind of request twice in a day produces the same
-  idempotency key, so the CRM can drop the repeat; the key uses the CRM's own matching rules
-  (e-mail lowercased and trimmed, last nine digits of the phone).
+  Duplicates: the idempotency key identifies one request, not one person. The same person sending
+  the same content twice in a day (a double click, a retry after a time-out) produces the same key
+  and the CRM drops the repeat. A second request from that person with anything different in it
+  (another configuration, another message, another kind) is a new request and gets a new key.
+  The person part of the key uses the CRM's own matching rules (e-mail lowercased and trimmed,
+  last nine digits of the phone).
 */
 
 const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -25,14 +28,28 @@ export function webReference(now = new Date()): string {
   return `W${d}-${r}`;
 }
 
-export function dedupeKey(lead: Pick<LeadInput, 'email' | 'phone' | 'kind'>, now = new Date()): string {
+type KeyFields = Pick<LeadInput, 'email' | 'phone' | 'kind'> & Partial<Omit<LeadInput, 'email' | 'phone' | 'kind'>>;
+const squash = (v: string | null | undefined) => (v ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+export function dedupeKey(lead: KeyFields, now = new Date()): string {
   const phone = lead.phone ? phoneDigits(lead.phone).slice(-9) : '';
-  return createHash('sha256').update(`${lead.email.trim().toLowerCase()}|${phone}|${lead.kind}|${now.toISOString().slice(0, 10)}`).digest('hex');
+  // what was asked: two requests are the same only if all of this is the same
+  const content = JSON.stringify([
+    squash(lead.city), squash(lead.company), lead.plot ?? null, squash(lead.plotNote), squash(lead.message),
+    squash(lead.establishment), lead.units ?? null, lead.config ?? null, lead.visual ?? null,
+  ]);
+  return createHash('sha256').update(`${lead.email.trim().toLowerCase()}|${phone}|${lead.kind}|${now.toISOString().slice(0, 10)}|${content}`).digest('hex');
+}
+
+/** a stable pseudonym for the visitor's address, so the CRM can keep a durable per-visitor limit without ever seeing the address */
+export function visitorTag(address: string): string | null {
+  if (!env.leadSecret || !address) return null;
+  return createHmac('sha256', env.leadSecret).update(`visitor:${address}`).digest('hex').slice(0, 32);
 }
 
 export type CrmLead = ReturnType<typeof toCrm>;
 
-export function toCrm(lead: LeadInput, quote: PublicQuote | null, reference: string, now = new Date()) {
+export function toCrm(lead: LeadInput, quote: PublicQuote | null, reference: string, now = new Date(), visitor: string | null = null) {
   const notes: string[] = [];
   if (lead.kind === 'visit') notes.push(lead.lang === 'ca' ? 'Sol·licita visitar la casa pilot de Bellvís.' : 'Solicita visitar la casa piloto de Bellvís.');
   if (lead.kind === 'mineral') notes.push(`MINERAL · ${lead.establishment ?? '—'} · ${lead.units ?? '—'} u.`);
@@ -61,12 +78,14 @@ export function toCrm(lead: LeadInput, quote: PublicQuote | null, reference: str
     // quote_versions.configurator_input, in the engine's own vocabulary
     configurator: lead.config ? { input: lead.config, visual: lead.visual, tariff: quote?.tariff ?? null, totalCents: quote?.totalCents ?? null } : null,
     notes: notes.join('\n'),
+    // only sent when there is one: the CRM uses it for its durable rate limit and does not store it
+    ...(visitor ? { visitor } : {}),
   };
 }
 
 const recent = new Map<string, number>();
 
-export type Delivery = { delivered: boolean; duplicate?: boolean; reason?: 'disabled' | 'crm_error' | 'network' };
+export type Delivery = { delivered: boolean; duplicate?: boolean; reason?: 'disabled' | 'crm_error' | 'network' | 'rate' };
 
 export async function deliver(payload: CrmLead, key: string): Promise<Delivery> {
   if (!leadsLive()) return { delivered: false, reason: 'disabled' };
@@ -80,10 +99,16 @@ export async function deliver(payload: CrmLead, key: string): Promise<Delivery> 
   try {
     const res = await fetch(env.leadUrl!, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key, 'X-ModularDom-Timestamp': ts, 'X-ModularDom-Signature': signature },
+      headers: {
+        'Content-Type': 'application/json', 'Idempotency-Key': key, 'X-ModularDom-Timestamp': ts, 'X-ModularDom-Signature': signature,
+        // only for a CRM preview deployment behind Vercel's Deployment Protection; never needed in production
+        ...(env.crmProtectionBypass ? { 'x-vercel-protection-bypass': env.crmProtectionBypass } : {}),
+      },
+      redirect: 'error',
       body,
       signal: AbortSignal.timeout(8000),
     });
+    if (res.status === 429) return { delivered: false, reason: 'rate' };
     if (!res.ok) return { delivered: false, reason: 'crm_error' };
     recent.set(key, now);
     return { delivered: true };

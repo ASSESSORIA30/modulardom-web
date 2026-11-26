@@ -41,6 +41,13 @@ export const WHATSAPP: { enabled: boolean; number: string | null } = { enabled: 
  */
 export const CLIENT_AREA: { enabled: boolean; url: string } = { enabled: false, url: 'https://crmmodulardom.vercel.app/portal' };
 
+/*
+  The privacy policy page is still a placeholder: the text has to come from ModularDom. Until it is
+  published here, production does not send any form to the CRM, whatever the server variables say
+  (src/server/env.ts). Preview deployments, which only ever see test data, are not held back.
+*/
+export const PRIVACY_POLICY = { published: false };
+
 /** a wa.me link that opens with a message fitting where the visitor is */
 export const waHref = (message: string) => (WHATSAPP.enabled && WHATSAPP.number ? `https://wa.me/${WHATSAPP.number}?text=${encodeURIComponent(message)}` : null);
 

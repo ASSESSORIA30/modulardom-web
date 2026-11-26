@@ -1,3 +1,4 @@
+import { PRIVACY_POLICY } from '@/content/site';
 /*
   Everything the server needs from its environment, read in one place. None of it reaches the
   browser: no variable here starts with NEXT_PUBLIC_, and this file is only imported from
@@ -16,6 +17,7 @@ export const env = {
   leadUrl: process.env.CRM_LEAD_URL || null,
   leadSecret: process.env.CRM_LEAD_SECRET || null,
   leadsEnabled: on(process.env.CRM_LEADS_ENABLED),
+  crmProtectionBypass: process.env.CRM_PROTECTION_BYPASS || null,
   /** bearer token for /api/admin/*; without it those routes do not exist */
   adminToken: process.env.ADMIN_TOKEN || null,
   siteUrl: (process.env.SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')).replace(/\/$/, ''),
@@ -23,4 +25,6 @@ export const env = {
   indexable: on(process.env.SITE_INDEXABLE),
 };
 
-export const leadsLive = () => env.leadsEnabled && !!env.leadUrl && !!env.leadSecret;
+/** personal data is only collected in production once the privacy policy is published */
+export const privacyGate = (vercelEnv = process.env.VERCEL_ENV, published = PRIVACY_POLICY.published) => published || vercelEnv !== 'production';
+export const leadsLive = () => env.leadsEnabled && !!env.leadUrl && !!env.leadSecret && privacyGate();

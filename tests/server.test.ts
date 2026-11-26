@@ -84,10 +84,32 @@ describe('leads for the CRM', () => {
     expect(dedupeKey({ email: 'anna@example.com', phone: '600112233', kind: 'visit' }, day)).not.toBe(a);
     expect(dedupeKey({ email: 'anna@example.com', phone: '600112233', kind: 'quote' }, new Date(now + 864e5))).not.toBe(a);
   });
+  it('treats a retry as the same request and a different request from the same person as a new one', () => {
+    const day = new Date(now);
+    const first = dedupeKey(lead, day);
+    expect(dedupeKey({ ...lead, message: lead.message ? `  ${lead.message.toUpperCase()} ` : null }, day)).toBe(first);
+    expect(dedupeKey({ ...lead, config: { ...lead.config!, metres: lead.config!.metres + 20 } }, day)).not.toBe(first);
+    expect(dedupeKey({ ...lead, message: 'Una altra consulta, el mateix dia' }, day)).not.toBe(first);
+    expect(dedupeKey({ ...lead, plotNote: 'Un altre terreny' }, day)).not.toBe(first);
+  });
+  it('sends the visitor tag only when there is one', () => {
+    expect('visitor' in toCrm(lead, null, 'W000000-TEST', new Date(now))).toBe(false);
+    expect(toCrm(lead, null, 'W000000-TEST', new Date(now), 'a'.repeat(32)).visitor).toBe('a'.repeat(32));
+  });
   it('issues references that are not guessable from one another', () => {
     const refs = new Set(Array.from({ length: 200 }, () => webReference(new Date(now))));
     expect(refs.size).toBeGreaterThan(195);
     expect([...refs][0]).toMatch(/^W\d{6}-[A-Z2-9]{4}$/);
+  });
+});
+
+describe('privacy gate', () => {
+  it('holds production back until the policy is published, and lets previews test', async () => {
+    const { privacyGate } = await import('@/server/env');
+    expect(privacyGate('production', false)).toBe(false);
+    expect(privacyGate('production', true)).toBe(true);
+    expect(privacyGate('preview', false)).toBe(true);
+    expect(privacyGate(undefined, false)).toBe(true);
   });
 });
 

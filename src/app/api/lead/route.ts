@@ -1,6 +1,7 @@
 import { env } from '@/server/env';
 import { guardPost, json } from '@/server/guard';
-import { dedupeKey, deliver, toCrm, webReference } from '@/server/leads';
+import { dedupeKey, deliver, toCrm, visitorTag, webReference } from '@/server/leads';
+import { clientKey } from '@/server/rate-limit';
 import { publicQuote } from '@/server/quote';
 import { getTariff } from '@/server/tariff';
 import { parseLead } from '@/server/validate';
@@ -24,6 +25,8 @@ export async function POST(req: Request) {
   const tariff = lead.config && env.pricingPublic ? await getTariff() : null;
   const quote = tariff && lead.config ? publicQuote(tariff.params, tariff.number, lead.config) : null;
   const reference = webReference();
-  const result = await deliver(toCrm(lead, quote, reference), dedupeKey(lead));
+  const result = await deliver(toCrm(lead, quote, reference, new Date(), visitorTag(clientKey(req))), dedupeKey(lead));
+  // the CRM keeps the durable limit (per visitor, in its database); the form already knows how to say it
+  if (result.reason === 'rate') return json(429, { error: 'rate' }, { 'Retry-After': '3600' });
   return json(result.delivered ? 200 : 202, { ...result, ...(result.delivered ? { reference } : {}) });
 }

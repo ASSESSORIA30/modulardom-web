@@ -17,7 +17,7 @@ Analitzat en mode lectura el repositori `ASSESSORIA30/CRM_MODULARDOM` (commit `a
 `POST {CRM_LEAD_URL}` amb JSON, des del servidor de la web:
 
 ```
-Idempotency-Key: <sha256 de correu|9 últims dígits del telèfon|tipus|dia>
+Idempotency-Key: <sha256 de correu|9 últims dígits del telèfon|tipus|dia|contingut de la sol·licitud>
 X-ModularDom-Timestamp: <segons Unix>
 X-ModularDom-Signature: <hex HMAC-SHA256("<timestamp>.<cos>", CRM_LEAD_SECRET)>
 ```
@@ -43,6 +43,13 @@ X-ModularDom-Signature: <hex HMAC-SHA256("<timestamp>.<cos>", CRM_LEAD_SECRET)>
 
 `configurator.input` és exactament el `ConfigInput` del motor del CRM, per desar-lo tal qual a
 `quote_versions.configurator_input`.
+
+La clau d'idempotència identifica una sol·licitud, no una persona: un reintent porta la mateixa
+clau i el CRM el descarta; una altra sol·licitud del mateix client el mateix dia (una altra
+configuració, un altre missatge) porta una clau diferent i entra com a nova. El cos pot portar
+també `"visitor"`: un pseudònim de l'adreça del visitant (HMAC amb el secret, 32 hex) que el CRM
+fa servir per al seu límit de peticions persistent i no desa. Si el CRM respon `429`, el
+formulari diu «massa intents» i no confirma res.
 
 ## Banda del CRM (implementada, apagada)
 
