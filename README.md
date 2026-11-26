@@ -1,39 +1,79 @@
-# ModularDom — web corporativa
+# ModularDom — web corporativa (V5)
 
-Next.js (App Router) · TypeScript · Tailwind CSS 4 · GSAP ScrollTrigger · Lenis.
+Next.js (App Router) · TypeScript · Tailwind CSS 4 · GSAP ScrollTrigger · Lenis · three.js.
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000  →  /ca, /es
 npm run build
+npm test           # motor de pressupost (paritat amb l'original) i regles del servidor
 ```
 
-## El recorregut
+## Estructura de la portada
 
-La portada és un recorregut per la casa lligat al scroll: cada escena és una seqüència de
-fotogrames dibuixada en un `<canvas>`, endavant i enrere.
+1. **Recorregut** (exterior → entrada → interior → cuina): 550 fotogrames lligats al scroll.
+2. **Projectes**: galeria horitzontal. Mostra les obres de `src/content/projects.ts`; mentre és buit, la casa conceptual, etiquetada com a visualització.
+3. **Sistemes constructius**: maqueta 3D que es descompon en set capes.
+4. **Qualitats i acabats**: catàleg de mostres conceptuals i la memòria de qualitats publicada.
+5. **Configurador**: la maqueta respon a cada decisió. Sense preus.
+6. **Procés**: sis passos amb un alçat que es dibuixa.
+7. **MINERAL**: línia de bungalows, registre B2B.
+8. **Tancament i contacte**.
 
 | Què | On |
 |---|---|
-| Llista d'escenes, ordre, posició del text | `src/content/scenes.ts` |
-| Textos CAT / ES i menú | `src/content/i18n.ts` |
-| Rellotge del recorregut i solapament de les transicions | `src/components/journey/timeline.ts` |
-| Càrrega progressiva, memòria i dibuix | `src/components/journey/engine.ts` |
-| Scroll, animació del text, indicador | `src/components/journey/Journey.tsx` |
-| Vídeos originals (intactes) | `media/originals/` |
-| Fotogrames generats | `public/frames/<escena>/{lg,sm}/` |
+| Textos CAT / ES | `src/content/i18n.ts` |
+| Dades de l'empresa i interruptors pendents del client | `src/content/site.ts` |
+| Obres reals · models MINERAL | `src/content/projects.ts` · `src/content/mineral.ts` |
+| Motor del recorregut | `src/components/tour/engine.ts` |
+| Maqueta 3D: geometria i estat · llum i materials | `src/components/house3d/scene.ts` · `materials.ts` |
+| Motor de pressupost · tarifa | `src/lib/configurator/engine.ts` · `tariff.ts` |
+| Sortida de formularis (CRM desactivat) | `src/lib/crm.ts` |
+| Vídeos originals 4K (intactes, a l'arrel) i muntatge | `*.mp4`, `media/tour.json` |
 
-### Afegir una escena (suite, bany, despatx, terrassa, exterior nocturn)
+## Dades verificades (de www.modulardom.com)
 
-1. Copia el vídeo a `media/originals/` i afegeix-lo a `media/scenes.json` (`focusX` és el punt
-   horitzontal que es conserva en pantalles verticals).
-2. `npm run frames` (cal `ffmpeg`): genera els fotogrames i actualitza `src/content/frames.json`.
-3. Afegeix l'escena a `SCENES` (`src/content/scenes.ts`) i els seus textos a `i18n.ts`.
+Raó social, CIF, correu, telèfon, WhatsApp, Lleida i casa pilot a Bellvís: `COMPANY` a `site.ts`.
+Memòria de qualitats: text publicat al configurador actual. Paleta: blau marí, crema i daurat de la web actual.
+Logotip: l'únic fitxer publicat és un PNG de 200 px (`public/brand/`), usat a la icona i al peu.
+Els «proyectos realizados» de la web actual semblen renders i **no** s'utilitzen com a obres reals.
 
-La llargada del scroll, l'indicador i les transicions s'ajusten sols. Si es regeneren fotogrames
-d'una escena existent, incrementa `FRAMES_VERSION`.
+## Configurador, pressupost i formularis
+
+- Pàgines pròpies: `/configurador`, `/projectes` (`/es/proyectos`), `/mineral`, `/contacte` (`/es/contacto`).
+- Les preguntes són les del configurador actual de ModularDom; `src/lib/configurator/engine.ts` és el seu
+  motor, portat línia per línia i provat contra l'original (`tests/engine.test.ts`).
+- **Cap preu al repositori ni al navegador.** El servidor llegeix la tarifa del CRM i `POST /api/quote`
+  només retorna imports finals. `POST /api/lead` valida, filtra spam i signa.
+- El configurador és també la segona pantalla de la portada. «Descarregar pressupost» (`POST /api/budget`)
+  valida, recalcula al servidor, registra client i pressupost al CRM, genera el PDF (`src/server/dossier.ts`),
+  el desa al CRM i només llavors el lliura. `POST /api/recover` torna a un pressupost amb el seu enllaç
+  privat (`#r=<token>`); `POST /api/quote-visit` demana la visita a la casa pilot des d'un pressupost.
+- Cobertes: plana (estàndard), inclinada d'una aigua i a dues aigües, per m² de coberta. Preus, pendents,
+  voladís i proporció són a la tarifa del CRM; sense ells, la partida surt «pendent de valorar».
+- Tot està apagat per defecte. Com s'activa: `docs/operations.md`. Contracte amb el CRM: `docs/crm-integration.md`.
+
+## Interruptors de contingut (`src/content/site.ts`)
+
+Reclam de preu («des de 993 €/m²») · logotip vectorial · WhatsApp (número verificat, botó apagat) ·
+àrea de clients (enllaç al portal del CRM, apagat). La imatge nocturna definitiva ja és al tancament (`media/03-mansio-nocturna.png`).
+Obres reals: `src/content/projects.ts`. Models MINERAL: `src/content/mineral.ts`.
+
+## El muntatge del recorregut
+
+`media/tour.json` defineix quins fotogrames de cada clip s'utilitzen. El clip 1 acaba amb 4 fotogrames
+que salten enrere a una imatge fixa, i el clip 2 comença amb aquesta mateixa imatge: s'exclouen
+(`to: 356`, `from: 1`) i el moviment queda continu amb un tall directe.
+
+```bash
+npm run tour             # fotogrames (AVIF) + mapa de moviment + retalls; cal ffmpeg (~25 min)
+npm run tour -- --stills # només els retalls de les seccions
+npm run tour -- --map    # només el mapa de moviment
+```
+
+Si es regeneren fotogrames, incrementa `TOUR_VERSION` a `src/content/tour.ts` (memòria cau d'un any).
 
 ## Desplegament
 
 Vercel detecta Next.js sense configuració. Les pàgines porten `noindex` fins al llançament
-(`src/app/[lang]/layout.tsx`).
+(`src/app/[lang]/layout.tsx`). Branques: `main` = V1, `redesign/cinematic-v2`, `-v3` (base aprovada), `-v4`.

@@ -1,0 +1,588 @@
+'use client';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { HouseCanvas } from '@/components/house3d/HouseCanvas';
+import type { HouseConfig, HouseScene } from '@/components/house3d/scene';
+import { Lines } from '@/components/ui/Lines';
+import { Reveal } from '@/components/ui/Reveal';
+import { BudgetActions, type Mode } from '@/components/ui/BudgetActions';
+import type { Dictionary, Locale } from '@/content/i18n';
+import { waHref } from '@/content/site';
+import type { EngineInput } from '@/lib/configurator/engine';
+
+/*
+  The configurator: the model on the left, the decisions on the right, each one changing the model.
+
+  Its questions are the ones ModularDom's own configurator asks today (surface, bedrooms,
+  bathrooms, suite, kitchen, garage, climate, extras), so the answers map one to one onto the
+  company's budget engine (src/lib/configurator/engine.ts), now with floors and roof type, which
+  the engine prices too. Two more (system, façade) and the massing only change the model and are
+  settled in the project.
+
+  Prices: the browser never holds a tariff or a formula. It sends the choices to /api/quote and
+  shows what comes back; while prices are switched off on the server, that is nothing, and the
+  page says the budget is prepared by ModularDom's team.
+
+  The same component is the home page's second screen and the /configurador page (`full` only
+  makes its title the page's h1). Both keep the choices for the session, and both let the visitor
+  download the budget or ask for a visit (src/components/ui/BudgetActions.tsx). A private link
+  (#r=<token>) brings a downloaded budget back.
+*/
+
+const SURFACE = { min: 100, max: 400, step: 10, initial: 180 };
+const CLIMATE = ['aerotermia', 'aireConductos'];
+const EXTRAS = ['piscina', 'porche', 'placasSolares']; // + safareig, which the engine counts with the interior
+
+type State = {
+  surface: number; floors: number; volume: number;
+  bedrooms: number; bathrooms: number; suite: number; kitchen: number;
+  vehicles: number; climate: boolean[]; extras: boolean[];
+  system: number; facade: number; roof: number;
+};
+/** what the server lets a visitor see of a budget (src/server/quote.ts) */
+type PublicQuote = {
+  tariff: string; validDays: number; hasPending: boolean;
+  lines: { key: string; label: { ca: string; es: string }; detail?: { ca: string; es: string }; amountCents: number; pending?: boolean }[];
+  subtotalCents: number; vatWorksCents: number; vatWorksPct: number; vatArchitectCents: number; vatArchitectPct: number; totalCents: number;
+};
+/** a budget brought back with its private link: what it was, and what the same choices cost today */
+type Recovered = { reference: string; createdAt: string; tariff: string; totalCents: number; pdf: boolean; current: { tariff: string; totalCents: number; sameTariff: boolean } | null };
+const STORE = 'md-config';
+const ROOF = ['flat', 'mono', 'gable'] as const;
+const COBERTA = ['plana', 'inclinada', 'dues_aigues'] as const;
+
+const INITIAL: State = { surface: SURFACE.initial, floors: 1, volume: 0, bedrooms: 3, bathrooms: 2, suite: 1, kitchen: 1, vehicles: 0, climate: [true, false], extras: [false, false, false, false], system: 0, facade: 0, roof: 0 };
+
+const chip = (on: boolean) =>
+  `min-h-11 border px-4 text-[0.9375rem] font-medium transition-[background-color,color,border-color,transform] duration-200 active:scale-[0.97] ${on ? 'border-paper bg-paper text-ink' : 'border-paper/30 hover:border-paper'}`;
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2 py-3 sm:grid-cols-[8.5rem_1fr] sm:items-center">
+      <span className="text-[0.9375rem] text-paper/75">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function Options({ label, options, value, onChange }: { label: string; options: string[]; value: number; onChange: (i: number) => void }) {
+  const row = useRef<HTMLDivElement>(null);
+  const key = (e: React.KeyboardEvent) => {
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = (value + d + options.length) % options.length;
+    onChange(next);
+    row.current!.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+  };
+  return (
+    <div ref={row} role="radiogroup" aria-label={label} onKeyDown={key} className="flex flex-wrap gap-2">
+      {options.map((o, i) => (
+        <button key={o} type="button" role="radio" aria-checked={i === value} tabIndex={i === value ? 0 : -1} onClick={() => onChange(i)} className={chip(i === value)}>
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Toggles({ label, options, value, onChange }: { label: string; options: string[]; value: boolean[]; onChange: (v: boolean[]) => void }) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((o, i) => (
+        <button key={o} type="button" aria-pressed={value[i]} onClick={() => onChange(value.map((v, k) => (k === i ? !v : v)))} className={chip(value[i])}>
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Stepper({ label, value, min, max, zero, onChange }: { label: string; value: number; min: number; max: number; zero?: string; onChange: (n: number) => void }) {
+  return (
+    <div role="group" aria-label={label} className="flex w-fit items-stretch border border-paper/30">
+      <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} aria-label={`${label} −1`} className="min-h-11 w-12 text-xl transition-[transform,opacity] duration-150 active:scale-90 disabled:opacity-30">
+        −
+      </button>
+      <output className="t-num flex min-w-16 items-center justify-center border-x border-paper/30 px-3 text-[1.0625rem] font-medium" aria-live="polite">
+        {value === 0 && zero ? zero : value}
+      </output>
+      <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label={`${label} +1`} className="min-h-11 w-12 text-xl transition-[transform,opacity] duration-150 active:scale-90 disabled:opacity-30">
+        +
+      </button>
+    </div>
+  );
+}
+
+const clampInt = (v: string | null, min: number, max: number, fallback: number) => {
+  const n = v === null ? NaN : parseInt(v, 10);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
+
+/** the engine's and the model's vocabulary, back into the controls' own */
+function toState(v: State, cfg: Partial<EngineInput>, vis: Partial<{ floors: number; system: string; facade: string; roof: string; volume: string }>): State {
+  const num = (n: unknown, min: number, max: number, fallback: number) => (typeof n === 'number' && Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback);
+  const at = (list: readonly string[], k: unknown, fallback: number) => (typeof k === 'string' && list.includes(k) ? list.indexOf(k) : fallback);
+  const floors = vis.floors ?? cfg.plantes;
+  return {
+    ...v,
+    surface: Math.round(num(cfg.metres, SURFACE.min, SURFACE.max, v.surface) / SURFACE.step) * SURFACE.step,
+    bedrooms: num(cfg.habitacions, 1, 6, v.bedrooms),
+    bathrooms: num(cfg.banys, 1, 4, v.bathrooms),
+    suite: at(['sin', 'bano', 'bano_vestidor'], cfg.suite, v.suite),
+    kitchen: at(['basica', 'isla'], cfg.cuina, v.kitchen),
+    vehicles: num(cfg.vehicles, 0, 4, v.vehicles),
+    climate: Array.isArray(cfg.installacions) ? CLIMATE.map((k) => cfg.installacions!.includes(k)) : v.climate,
+    extras: Array.isArray(cfg.extres) ? [cfg.safareig === true, ...EXTRAS.map((k) => cfg.extres!.includes(k))] : v.extras,
+    floors: floors === 1 ? 0 : floors === 2 ? 1 : v.floors,
+    roof: cfg.coberta ? at(COBERTA, cfg.coberta, v.roof) : at(ROOF, vis.roof, v.roof),
+    system: at(['cellular', 'timber'], vis.system, v.system),
+    facade: at(['mineral', 'wood'], vis.facade, v.facade),
+    volume: at(['compact', 'L'], vis.volume, v.volume),
+  };
+}
+
+export function Configurator({ dict, lang, full = false }: { dict: Dictionary; lang: Locale; full?: boolean }) {
+  const c = dict.configurator;
+  const b = dict.budget;
+  const scene = useRef<HouseScene | null>(null);
+  const section = useRef<HTMLElement>(null);
+  const [open, setOpen] = useState(0);
+  const [s, setS] = useState<State>(INITIAL);
+  const [quote, setQuote] = useState<PublicQuote | null>(null);
+  const [mode, setMode] = useState<Mode>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [recovered, setRecovered] = useState<Recovered | 'invalid' | null>(null);
+  const [inView, setInView] = useState(false);
+  const loaded = useRef(false);
+  const set = (patch: Partial<State>) => setS((v) => ({ ...v, ...patch }));
+
+  // where to start from: a private link (#r=…), an older link with the choices in the query, or this session's choices
+  useEffect(() => {
+    const hash = /(?:^#|&)r=([0-9a-f]{64})(?:&|$)/.exec(location.hash);
+    const q = new URLSearchParams(location.search);
+    if (full && hash) {
+      const t = hash[1];
+      // the token leaves the address bar at once: it is kept in memory, not in the history
+      history.replaceState(null, '', location.pathname + location.search);
+      fetch('/api/recover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: t }) })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { config: Partial<EngineInput>; visual: Record<string, never>; original: Omit<Recovered, 'current'>; current: Recovered['current'] } | null) => {
+          if (!d) return setRecovered('invalid');
+          setS((v) => toState(v, d.config, d.visual));
+          setToken(t);
+          setRecovered({ ...d.original, current: d.current });
+        })
+        .catch(() => setRecovered('invalid'))
+        .finally(() => (loaded.current = true));
+      return;
+    }
+    if (full && q.has('metres')) {
+      const list = (k: string) => (q.get(k) ?? '').split('-');
+      const n = (k: string) => (q.has(k) ? parseInt(q.get(k)!, 10) : undefined);
+      setS((v) =>
+        toState(
+          v,
+          {
+            metres: n('metres'), habitacions: n('habitacions'), banys: n('banys'), suite: q.get('suite') as EngineInput['suite'], cuina: q.get('cuina') as EngineInput['cuina'], vehicles: n('vehicles'),
+            ...(q.has('installacions') ? { installacions: list('installacions') } : {}),
+            ...(q.has('extres') ? { extres: list('extres'), safareig: q.get('safareig') === '1' } : {}),
+          },
+          { floors: n('plantes'), system: q.get('sistema') ?? undefined },
+        ),
+      );
+    } else {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(STORE) ?? 'null') as State | null;
+        if (saved && typeof saved.surface === 'number' && Array.isArray(saved.extras) && saved.extras.length === INITIAL.extras.length) setS({ ...INITIAL, ...saved, roof: Math.min(2, saved.roof ?? 0) });
+      } catch {
+        /* no storage: start from the defaults */
+      }
+    }
+    loaded.current = true;
+  }, [full]);
+  // the choices stay for the session, across the home page and the configurator page
+  useEffect(() => {
+    if (!loaded.current) return;
+    try {
+      sessionStorage.setItem(STORE, JSON.stringify(s));
+    } catch {
+      /* see above */
+    }
+  }, [s]);
+  // a phone gets the total and the download button at the thumb while this section is on screen
+  useEffect(() => {
+    const el = section.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { rootMargin: '-35% 0px -35% 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  // the same answers, three ways: for the model, for the budget engine, for the link
+  const model = useMemo(
+    (): Partial<HouseConfig> => ({
+      floors: s.floors === 0 ? 1 : 2,
+      width: 0.8 + ((s.surface - SURFACE.min) / (SURFACE.max - SURFACE.min)) * 0.55,
+      system: s.system === 1 ? 'timber' : 'cellular',
+      finish: s.facade === 1 ? 'wood' : 'mineral',
+      volume: s.volume === 1 ? 'L' : 'compact',
+      roof: ROOF[s.roof] ?? 'flat',
+      pool: s.extras[1],
+      porch: s.extras[2],
+      solar: s.extras[3],
+      garage: s.vehicles > 0,
+    }),
+    [s],
+  );
+  const input = useMemo(
+    (): EngineInput => ({
+      metres: s.surface,
+      habitacions: s.bedrooms,
+      banys: s.bathrooms,
+      suite: (['sin', 'bano', 'bano_vestidor'] as const)[s.suite],
+      cuina: s.kitchen === 1 ? 'isla' : 'basica',
+      vehicles: s.vehicles,
+      safareig: s.extras[0],
+      installacions: CLIMATE.filter((_, i) => s.climate[i]),
+      extres: EXTRAS.filter((_, i) => s.extras[i + 1]),
+      plantes: s.floors === 0 ? 1 : 2,
+      coberta: COBERTA[s.roof] ?? 'plana',
+    }),
+    [s],
+  );
+  const visual = useMemo(
+    () => ({ floors: s.floors + 1, system: model.system, facade: model.finish, roof: model.roof, volume: model.volume }),
+    [s.floors, model],
+  );
+
+  // the budget is computed on the server; ask again a moment after the last change
+  useEffect(() => {
+    const ctl = new AbortController();
+    const t = window.setTimeout(() => {
+      fetch('/api/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), signal: ctl.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { enabled?: boolean; quote?: PublicQuote } | null) => setQuote(d?.enabled && d.quote ? d.quote : null))
+        .catch(() => {});
+    }, 350);
+    return () => {
+      window.clearTimeout(t);
+      ctl.abort();
+    };
+  }, [input]);
+
+  useEffect(() => {
+    scene.current?.setConfig(model);
+  }, [model]);
+
+  // drag to turn the model; it keeps the angle you leave it at
+  const turn = useRef({ at: 0, start: 0, base: 0, down: false });
+  const latest = useRef(model);
+  latest.current = model;
+  const onReady = useCallback((sc: HouseScene) => {
+    scene.current = sc;
+    sc.setConfig(latest.current);
+  }, []);
+  const drag = {
+    onPointerDown: (e: React.PointerEvent) => {
+      turn.current = { ...turn.current, down: true, start: e.clientX, base: turn.current.at };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (!turn.current.down) return;
+      turn.current.at = turn.current.base - (e.clientX - turn.current.start) * 0.006;
+      scene.current?.setTurn(turn.current.at);
+    },
+    onPointerUp: () => (turn.current.down = false),
+    onPointerCancel: () => (turn.current.down = false),
+  };
+
+  const picked = (opts: string[], on: boolean[]) => opts.filter((_, i) => on[i]);
+  const groups: { label: string; value: string; body: React.ReactNode }[] = [
+    {
+      label: c.groups.house,
+      value: `${s.surface} ${c.surface.unit} · ${c.floors.options[s.floors]} · ${c.roof.options[s.roof]}`,
+      body: (
+        <>
+          <Field label={c.surface.label}>
+            <label className="block">
+              <span className="flex items-baseline justify-between">
+                <span className="t-serif t-num text-[1.6rem] leading-none">
+                  {s.surface} <span className="font-sans text-[0.9375rem]">{c.surface.unit}</span>
+                </span>
+                <span className="t-note text-paper/70">{c.surface.hint}</span>
+              </span>
+              <input
+                type="range"
+                min={SURFACE.min}
+                max={SURFACE.max}
+                step={SURFACE.step}
+                value={s.surface}
+                onChange={(e) => set({ surface: +e.target.value })}
+                aria-label={c.surface.label}
+                aria-valuetext={`${s.surface} ${c.surface.unit}`}
+                className="range w-full"
+                style={{ '--fill': `${((s.surface - SURFACE.min) / (SURFACE.max - SURFACE.min)) * 100}%` } as React.CSSProperties}
+              />
+            </label>
+          </Field>
+          <Field label={c.floors.label}>
+            <Options {...c.floors} value={s.floors} onChange={(i) => set({ floors: i })} />
+          </Field>
+          <Field label={c.volume.label}>
+            <Options {...c.volume} value={s.volume} onChange={(i) => set({ volume: i })} />
+          </Field>
+          <Field label={c.roof.label}>
+            <Options {...c.roof} value={s.roof} onChange={(i) => set({ roof: i })} />
+          </Field>
+          <p className="t-note pb-1 pt-1 text-paper/70">{b.roofHint}</p>
+        </>
+      ),
+    },
+    {
+      label: c.groups.interior,
+      value: `${s.bedrooms} ${c.bedrooms.toLowerCase()} · ${s.bathrooms} ${c.bathrooms.toLowerCase()}`,
+      body: (
+        <>
+          <Field label={c.bedrooms}>
+            <Stepper label={c.bedrooms} value={s.bedrooms} min={1} max={6} onChange={(n) => set({ bedrooms: n })} />
+          </Field>
+          <Field label={c.bathrooms}>
+            <Stepper label={c.bathrooms} value={s.bathrooms} min={1} max={4} onChange={(n) => set({ bathrooms: n })} />
+          </Field>
+          <Field label={c.suite.label}>
+            <Options {...c.suite} value={s.suite} onChange={(i) => set({ suite: i })} />
+          </Field>
+          <Field label={c.kitchen.label}>
+            <Options {...c.kitchen} value={s.kitchen} onChange={(i) => set({ kitchen: i })} />
+          </Field>
+        </>
+      ),
+    },
+    {
+      label: c.groups.equipment,
+      value: [...picked(c.climate.options, s.climate), ...picked(c.extras.options, s.extras)].join(', ') || '—',
+      body: (
+        <>
+          <Field label={c.garage.label}>
+            <Stepper label={c.garage.label} value={s.vehicles} min={0} max={4} zero={c.garage.none} onChange={(n) => set({ vehicles: n })} />
+          </Field>
+          <Field label={c.climate.label}>
+            <Toggles {...c.climate} value={s.climate} onChange={(v) => set({ climate: v })} />
+          </Field>
+          <Field label={c.extras.label}>
+            <Toggles {...c.extras} value={s.extras} onChange={(v) => set({ extras: v })} />
+          </Field>
+        </>
+      ),
+    },
+    {
+      label: c.groups.look,
+      value: `${c.system.options[s.system]} · ${c.facade.options[s.facade]}`,
+      body: (
+        <>
+          <Field label={c.system.label}>
+            <Options {...c.system} value={s.system} onChange={(i) => set({ system: i })} />
+          </Field>
+          <Field label={c.facade.label}>
+            <Options {...c.facade} value={s.facade} onChange={(i) => set({ facade: i })} />
+          </Field>
+          <p className="t-note pb-1 pt-2 text-paper/70">{c.visualNote}</p>
+        </>
+      ),
+    },
+  ];
+
+  const money = (cents: number) => new Intl.NumberFormat(lang === 'ca' ? 'ca-ES' : 'es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100);
+
+  return (
+    <section ref={section} className="bg-ink text-paper" data-theme="dark" data-dock-off aria-labelledby="configurador">
+      <div className="grid md:min-h-[100svh] md:grid-cols-12">
+        {/* the stage: a studio floor of light, the model on its base */}
+        <div className="relative h-[48svh] overflow-hidden md:sticky md:top-0 md:col-span-7 md:h-[100svh]">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(62%_50%_at_50%_60%,rgb(226_198_117/0.1),rgb(242_238_229/0.05)_45%,transparent_74%)]" aria-hidden="true" />
+          <div className="absolute inset-0 cursor-grab touch-pan-y active:cursor-grabbing" {...drag}>
+            <HouseCanvas mode="config" className="h-full w-full" label={c.name} fallback={dict.systems.fallback} onReady={onReady} />
+          </div>
+          <p className="tag pointer-events-none absolute bottom-5 left-[var(--edge)] text-paper/70">{dict.ui.concept}</p>
+          <p className="t-note pointer-events-none absolute bottom-5 right-5 text-paper/70 max-md:hidden">{dict.ui.drag}</p>
+        </div>
+
+        {/* the decisions */}
+        <div className="wrap py-14 md:col-span-5 md:py-28 md:pl-[3.5vw]">
+          <Reveal as="header">
+            <p className="t-note mb-5 text-gold-light" data-fade>
+              {c.name}
+            </p>
+            {full ? (
+              <h1 id="configurador" className="t-title">
+                <Lines lines={c.title} />
+              </h1>
+            ) : (
+            <h2 id="configurador" className="t-title">
+              <Lines lines={c.title} />
+            </h2>
+            )}
+            <p className="t-lead mt-5 max-w-[34ch] text-paper/75" data-fade style={{ '--i': 2 } as React.CSSProperties}>
+              {c.text}
+            </p>
+          </Reveal>
+
+          {/* the total stays in sight while the options scroll (a phone has it in the bar at the bottom) */}
+          {quote && (
+            <div className="sticky top-[4.5rem] z-10 -mx-3 mt-8 flex items-center justify-between gap-4 border-y border-paper/20 bg-ink/95 px-3 py-3 backdrop-blur max-md:hidden" data-testid="budget-strip">
+              <p className="leading-tight">
+                <span className="block text-[0.6875rem] uppercase tracking-[0.08em] text-paper/65">{b.total}</span>
+                <span className="t-serif t-num text-[1.6rem]">{money(quote.totalCents)}</span>
+              </p>
+              <button
+                type="button"
+                className="btn btn-sm btn-paper shrink-0"
+                onClick={() => {
+                  setMode('download');
+                  requestAnimationFrame(() => document.getElementById('pressupost-accions')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+                }}
+              >
+                {b.download}
+              </button>
+            </div>
+          )}
+
+          <ol className={quote ? 'mt-10 md:mt-4' : 'mt-10'}>
+            {groups.map((g, i) => {
+              const on = open === i;
+              return (
+                <li key={g.label} className="border-t border-paper/20 last:border-b">
+                  <h3>
+                    <button type="button" aria-expanded={on} aria-controls={`cfg-${i}`} onClick={() => setOpen(on ? -1 : i)} className="group grid min-h-[3.75rem] w-full grid-cols-[2rem_1fr_auto] items-baseline gap-x-2 py-3 text-left">
+                      <span className={`t-note t-num transition-colors duration-300 ${on ? 'text-gold-light' : 'text-paper/70'}`}>{String(i + 1).padStart(2, '0')}</span>
+                      <span className={`t-serif text-[1.45rem] leading-tight transition-transform duration-500 ease-[var(--ease-out)] ${on ? 'translate-x-1 italic' : ''}`}>{g.label}</span>
+                      <span className={`max-w-[12rem] truncate text-right text-[0.875rem] text-paper/75 transition-opacity duration-300 ${on ? 'opacity-0' : ''}`}>{g.value}</span>
+                    </button>
+                  </h3>
+                  <div id={`cfg-${i}`} inert={!on} className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[var(--ease-out)] ${on ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                    <div className="overflow-hidden">
+                      <div className="pb-5 sm:pl-[2.5rem]">{g.body}</div>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+
+          {quote ? (
+            <div className="mt-8" aria-live="polite">
+              <h3 className="t-serif text-[1.45rem]">{c.quote.title}</h3>
+              <dl className="mt-3 text-[0.9375rem]">
+                {quote.lines.map((l) => (
+                  <div key={l.key} className="flex justify-between gap-6 border-t border-paper/15 py-2">
+                    <dt className="text-paper/80">
+                      {l.label[lang]}
+                      {l.detail && <span className="block text-[0.8125rem] text-paper/60">{l.detail[lang]}</span>}
+                    </dt>
+                    <dd className={l.pending ? 'text-right text-[0.8125rem] italic text-gold-light' : 't-num'}>{l.pending ? b.pending : money(l.amountCents)}</dd>
+                  </div>
+                ))}
+                {(
+                  [
+                    [c.quote.subtotal, quote.subtotalCents],
+                    [`${c.quote.vatWorks} (${String(quote.vatWorksPct).replace('.', ',')} %)`, quote.vatWorksCents],
+                    [`${c.quote.vatArch} (${String(quote.vatArchitectPct).replace('.', ',')} %)`, quote.vatArchitectCents],
+                  ] as const
+                ).map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-6 border-t border-paper/15 py-2 text-paper/80">
+                    <dt>{k}</dt>
+                    <dd className="t-num">{money(v)}</dd>
+                  </div>
+                ))}
+                <div className="flex items-baseline justify-between gap-6 border-y border-paper/40 py-3">
+                  <dt className="font-medium">{b.total}</dt>
+                  <dd className="t-serif t-num text-[1.9rem] leading-none" data-testid="budget-total">{money(quote.totalCents)}</dd>
+                </div>
+              </dl>
+              {quote.hasPending && <p className="t-note mt-3 max-w-[44ch] text-gold-light">{b.pendingNote}</p>}
+              <p className="t-note mt-3 max-w-[44ch] text-paper/70">{c.quote.note}</p>
+            </div>
+          ) : (
+            <p className="t-note mt-6 max-w-[40ch] text-paper/70">{c.noPrice}</p>
+          )}
+          {recovered && (
+            <div className="mt-6 border border-paper/25 p-4 text-[0.9375rem]" data-testid="budget-recovered" aria-live="polite">
+              {recovered === 'invalid' ? (
+                <p>{b.recoverFail}</p>
+              ) : (
+                <>
+                  <p className="font-medium">{b.recovered.replace('{ref}', recovered.reference).replace('{date}', new Intl.DateTimeFormat(lang === 'ca' ? 'ca-ES' : 'es-ES', { dateStyle: 'long' }).format(new Date(recovered.createdAt)))}</p>
+                  <dl className="mt-3">
+                    <div className="flex justify-between gap-6 border-t border-paper/15 py-2">
+                      <dt className="text-paper/80">{b.original.replace('{n}', recovered.tariff)}</dt>
+                      <dd className="t-num" data-testid="recovered-original">{money(recovered.totalCents)}</dd>
+                    </div>
+                    {recovered.current && (
+                      <div className="flex justify-between gap-6 border-t border-paper/15 py-2">
+                        <dt className="text-paper/80">
+                          {b.current}
+                          {recovered.current.sameTariff && <span className="block text-[0.8125rem] text-paper/60">{b.sameTariff}</span>}
+                        </dt>
+                        <dd className="t-num" data-testid="recovered-current">{money(recovered.current.totalCents)}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  {recovered.pdf && token && (
+                    <button
+                      type="button"
+                      className="link mt-3 text-[0.9375rem]"
+                      onClick={async () => {
+                        const res = await fetch('/api/recover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, pdf: true }) });
+                        if (!res.ok) return;
+                        const url = URL.createObjectURL(await res.blob());
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `ModularDom-${recovered.reference}.pdf`;
+                        a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+                      }}
+                    >
+                      {b.originalPdf}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          <BudgetActions
+            dict={dict} lang={lang} payload={() => ({ config: input, visual })} snapshot={() => scene.current?.snapshot() ?? null}
+            canPrice={!!quote} mode={mode} setMode={setMode} token={token} setToken={setToken}
+          />
+          {waHref(dict.whatsapp.configurator) && (
+            <a href={waHref(dict.whatsapp.configurator)!} target="_blank" rel="noopener noreferrer" className="link mt-4 inline-block text-[0.9375rem]">
+              {dict.ui.whatsapp}
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* phone: the total and the download button stay at the thumb while the configurator is on screen */}
+      <div
+        className={`glass fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-paper/10 bg-ink/85 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 text-paper backdrop-blur-xl transition-transform duration-500 ease-[var(--ease-drawer)] md:hidden ${inView && quote && !mode ? '' : 'translate-y-full'}`}
+        inert={!(inView && quote && !mode)}
+        data-testid="budget-bar"
+      >
+        <p className="min-w-0 leading-tight">
+          <span className="block text-[0.6875rem] uppercase tracking-[0.08em] text-paper/65">{b.total}</span>
+          <span className="t-serif t-num text-[1.35rem]">{quote ? money(quote.totalCents) : ''}</span>
+        </p>
+        <button
+          type="button"
+          className="btn btn-sm btn-paper shrink-0"
+          onClick={() => {
+            setMode('download');
+            requestAnimationFrame(() => document.getElementById('pressupost-accions')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+          }}
+        >
+          {b.download}
+        </button>
+      </div>
+    </section>
+  );
+}

@@ -2,30 +2,59 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { LOCALES, NAV, type Dictionary, type Locale } from '@/content/i18n';
+import { LOCALES, MENU, NAV, href, type Dictionary, type Locale } from '@/content/i18n';
+import { CLIENT_AREA, LOGO } from '@/content/site';
 import { stopScroll } from '@/lib/scroll';
 
 type Props = { dict: Dictionary; lang: Locale };
 
+/** The original logotype once its file is set in src/content/site.ts; the name in type until then. */
+function Logo() {
+  if (LOGO.src) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={LOGO.src} width={LOGO.width} height={LOGO.height} alt="ModularDom" className="h-7 w-auto" />;
+  }
+  return <span className="t-serif text-[1.45rem] leading-none tracking-[-0.01em]">ModularDom</span>;
+}
+
+/*
+  The bar: the name, then the two things a visitor is most likely to want (the configurator,
+  a way to talk), the language and the menu. It is clear; its ink follows the section underneath
+  (each section declares data-theme). On a phone the two actions move to a dock at the thumb.
+  The menu is a sheet drawn down from the bar: it opens unhurried and closes faster.
+*/
 export function Header({ dict, lang }: Props) {
   const pathname = usePathname();
-  const [solid, setSolid] = useState(false);
+  const [light, setLight] = useState(false);
   const [open, setOpen] = useState(false);
-  const menu = useRef<HTMLDivElement>(null);
+  const [docked, setDocked] = useState(false);
   const toggle = useRef<HTMLButtonElement>(null);
 
-  // clear over the tour, ivory once the page leaves it (or where there is no tour)
   useEffect(() => {
+    let raf = 0;
     const check = () => {
-      const tour = document.querySelector('[data-tour]');
-      setSolid(!tour || tour.getBoundingClientRect().bottom < 72);
+      raf = 0;
+      let theme = 'light';
+      for (const el of document.querySelectorAll<HTMLElement>('[data-theme]')) {
+        const r = el.getBoundingClientRect();
+        if (r.top <= 36 && r.bottom > 36) theme = el.dataset.theme ?? 'light';
+      }
+      setLight(theme === 'light');
+      // the dock arrives once the visitor has started to move, and steps aside for the closing's own actions
+      const end = document.querySelector('[data-dock-off]')?.getBoundingClientRect();
+      setDocked(window.scrollY > 40 && !(end && end.top < window.innerHeight * 0.6));
     };
+    const queue = () => (raf ||= requestAnimationFrame(check));
     check();
-    window.addEventListener('scroll', check, { passive: true });
-    window.addEventListener('resize', check);
+    window.addEventListener('scroll', queue, { passive: true });
+    window.addEventListener('resize', queue);
+    const mo = new MutationObserver(queue);
+    mo.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['data-theme'] });
     return () => {
-      window.removeEventListener('scroll', check);
-      window.removeEventListener('resize', check);
+      cancelAnimationFrame(raf);
+      mo.disconnect();
+      window.removeEventListener('scroll', queue);
+      window.removeEventListener('resize', queue);
     };
   }, [pathname]);
 
@@ -34,7 +63,6 @@ export function Header({ dict, lang }: Props) {
   useEffect(() => {
     stopScroll(open);
     if (!open) return;
-    menu.current?.querySelector<HTMLElement>('a')?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setOpen(false);
@@ -45,25 +73,25 @@ export function Header({ dict, lang }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  const rest = pathname.replace(/^\/(ca|es)/, '');
-  const main = NAV.filter((n) => n.key !== 'clients');
-  const tone = open ? 'text-ivory' : solid ? 'text-anthracite' : 'text-ivory';
+  // the same page in the other language has its own address
+  const slug = pathname.split('/')[2] ?? '';
+  const here = NAV.find((n) => n.slug[lang] === slug);
+  const other = (l: Locale) => (here ? href(l, here.key) : `/${l}`);
+  const tone = open || !light ? 'text-paper' : 'text-ink';
 
   const languages = (
-    <ul className="flex items-center gap-1 text-[0.8125rem] font-medium" aria-label={dict.ui.language}>
+    <ul className="flex items-center text-[0.875rem]" aria-label={dict.ui.language}>
       {LOCALES.map((l, i) => (
-        <li key={l} className="flex items-center gap-1">
-          {i > 0 && <span className="opacity-40" aria-hidden="true">/</span>}
+        <li key={l} className="flex items-center">
+          {i > 0 && <span className="mx-0.5 h-3 w-px bg-current opacity-35" aria-hidden="true" />}
           <Link
-            href={`/${l}${rest}`}
+            href={other(l)}
             hrefLang={l}
             lang={l}
             aria-current={l === lang ? 'true' : undefined}
-            className={`inline-flex min-h-11 min-w-9 items-center justify-center tracking-[0.08em] transition-opacity hover:opacity-100 ${
-              l === lang ? 'opacity-100' : 'opacity-55'
-            }`}
+            className={`inline-flex min-h-11 min-w-10 items-center justify-center transition-opacity duration-200 hover:opacity-100 ${l === lang ? 'opacity-100' : 'opacity-60'}`}
           >
-            {l === 'ca' ? 'CAT' : 'ES'}
+            {l === 'ca' ? 'Cat' : 'Es'}
           </Link>
         </li>
       ))}
@@ -72,56 +100,39 @@ export function Header({ dict, lang }: Props) {
 
   return (
     <>
-      <a
-        href="#contingut"
-        className="fixed left-4 top-4 z-[70] -translate-y-24 bg-ivory px-4 py-3 text-sm font-medium text-anthracite focus:translate-y-0"
-      >
+      <a href="#contingut" className="fixed left-4 top-4 z-[70] -translate-y-24 bg-paper px-4 py-3 text-sm font-medium text-ink focus:translate-y-0">
         {dict.ui.skip}
       </a>
-      <header
-        className={`fixed inset-x-0 top-0 z-50 transition-colors duration-500 ${tone} ${
-          solid && !open ? 'bg-ivory/90 backdrop-blur-md' : ''
-        }`}
-      >
-        <div className="wrap flex h-[4.5rem] items-center justify-between gap-6">
-          <Link href={`/${lang}`} className="text-[0.9375rem] font-semibold tracking-[0.22em]" aria-label="ModularDom">
-            MODULAR<span className="font-normal">DOM</span>
+      <header className={`fixed inset-x-0 top-0 z-50 transition-colors duration-500 ${tone}`}>
+        <div className="wrap flex h-[var(--header-h)] items-center justify-between gap-6">
+          <Link href={`/${lang}`} aria-label="ModularDom" className="inline-flex min-h-11 items-center">
+            <Logo />
           </Link>
-          <nav className="hidden nav:block" aria-label={dict.ui.menu}>
-            <ul className="flex items-center gap-7 text-[0.8125rem] font-medium">
-              {main.map((n) => (
-                <li key={n.key}>
-                  <Link
-                    href={`/${lang}/${n.slug}`}
-                    className="nav-link whitespace-nowrap"
-                    aria-current={rest === `/${n.slug}` ? 'page' : undefined}
-                  >
-                    {dict.nav[n.key]}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          <div className="flex items-center gap-4 md:gap-6">
-            <div className="hidden sm:block">{languages}</div>
-            <Link
-              href={`/${lang}/area-de-clients`}
-              className="hidden min-h-11 items-center whitespace-nowrap border border-current/40 px-4 text-[0.8125rem] font-medium transition-colors hover:border-current md:inline-flex"
-            >
-              {dict.nav.clients}
+          <div className="flex items-center gap-2 md:gap-6">
+            <Link href={href(lang, 'contact')} className="link hidden text-[0.9375rem] md:inline-flex">
+              {dict.ui.contactShort}
             </Link>
+            <Link href={href(lang, 'configurator')} className={`btn btn-sm hidden md:inline-flex ${open || !light ? 'btn-line' : 'btn-line-ink'}`}>
+              {dict.ui.configureShort}
+            </Link>
+            <div className="hidden sm:block">{languages}</div>
             <button
               ref={toggle}
               type="button"
-              className="group inline-flex min-h-11 items-center gap-3 text-[0.8125rem] font-medium tracking-[0.08em] nav:hidden"
+              className="group -mr-2 inline-flex min-h-11 items-center gap-3 px-2 text-[0.9375rem] font-medium"
               aria-expanded={open}
               aria-controls="menu"
               onClick={() => setOpen((v) => !v)}
             >
-              {open ? dict.ui.close : dict.ui.menu}
-              <span className="relative block h-3 w-6" aria-hidden="true">
-                <span className={`absolute inset-x-0 top-0 h-px bg-current transition-transform duration-500 ease-out-expo ${open ? 'translate-y-[6px] rotate-45' : ''}`} />
-                <span className={`absolute inset-x-0 bottom-0 h-px bg-current transition-transform duration-500 ease-out-expo ${open ? '-translate-y-[5px] -rotate-45' : ''}`} />
+              <span className="relative block overflow-hidden">
+                <span className={`block transition-transform duration-500 ease-[var(--ease-out)] ${open ? '-translate-y-full' : ''}`}>{dict.ui.menu}</span>
+                <span className={`absolute inset-0 transition-transform duration-500 ease-[var(--ease-out)] ${open ? '' : 'translate-y-full'}`} aria-hidden={!open}>
+                  {dict.ui.close}
+                </span>
+              </span>
+              <span className="relative block h-2.5 w-7" aria-hidden="true">
+                <span className={`absolute inset-x-0 top-0 h-px bg-current transition-transform duration-500 ease-[var(--ease-out)] ${open ? 'translate-y-[5px] rotate-[20deg]' : 'group-hover:translate-x-1'}`} />
+                <span className={`absolute inset-x-0 bottom-0 h-px bg-current transition-transform duration-500 ease-[var(--ease-out)] ${open ? '-translate-y-[4px] -rotate-[20deg]' : 'group-hover:-translate-x-1'}`} />
               </span>
             </button>
           </div>
@@ -130,34 +141,66 @@ export function Header({ dict, lang }: Props) {
 
       <div
         id="menu"
-        ref={menu}
         role="dialog"
         aria-modal="true"
         aria-label={dict.ui.menu}
         inert={!open}
-        className={`fixed inset-0 z-40 overflow-y-auto bg-anthracite text-ivory transition-[opacity,visibility] duration-500 nav:hidden ${
-          open ? 'visible opacity-100' : 'invisible opacity-0'
-        }`}
+        className="glass fixed inset-0 z-40 overflow-y-auto bg-ink/[0.94] text-paper backdrop-blur-2xl"
+        style={{
+          clipPath: open ? 'inset(0)' : 'inset(0 0 100% 0)',
+          visibility: open ? 'visible' : 'hidden',
+          transition: open ? 'clip-path 500ms var(--ease-drawer), visibility 0s' : 'clip-path 320ms var(--ease-in-out), visibility 0s 320ms',
+        }}
       >
-        <div className="wrap flex min-h-full flex-col justify-between gap-10 pb-8 pt-28">
-          <ul className="grid gap-x-12 md:grid-cols-2">
-            {NAV.map((n, i) => (
-              <li key={n.key} className="border-b border-ivory/15">
-                <Link
-                  href={`/${lang}/${n.slug}`}
-                  className={`flex min-h-14 items-baseline gap-4 py-3 font-display text-[clamp(1.6rem,5.2vw,2.6rem)] font-light leading-tight tracking-[-0.02em] transition-[opacity,transform] duration-700 ease-out-expo hover:translate-x-2 ${
-                    open ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-                  }`}
-                  style={{ transitionDelay: open ? `${80 + i * 35}ms` : '0ms' }}
-                >
-                  <span className="eyebrow w-6 text-ivory/50">{String(i + 1).padStart(2, '0')}</span>
-                  {dict.nav[n.key]}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <div className="sm:hidden">{languages}</div>
+        <div className="wrap grid min-h-full content-end gap-10 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-28 md:grid-cols-12 md:gap-x-10 md:pb-16">
+          <nav aria-label={dict.ui.menu} className="md:col-span-8">
+            <ul className="md:columns-2 md:gap-x-12">
+              {MENU.map((n, i) => (
+                <li key={n.key} className="break-inside-avoid overflow-hidden border-b border-paper/15">
+                  <Link
+                    // the clients' area is ModularDom's CRM portal, once it is switched on
+                    href={n.key === 'clients' && CLIENT_AREA.enabled ? CLIENT_AREA.url : href(lang, n.key)}
+                    aria-current={here?.key === n.key ? 'page' : undefined}
+                    className="group flex min-h-[3.9rem] items-center gap-5 t-serif text-[clamp(1.6rem,1.15rem+1.7vw,2.5rem)] leading-tight"
+                    style={{
+                      // each row rises out of its own rule, later the lower it is; on closing they simply go
+                      transform: open ? 'none' : 'translateY(110%)',
+                      opacity: open ? 1 : 0,
+                      transition: open ? `transform 720ms var(--ease-out) ${140 + i * 42}ms, opacity 400ms ease ${140 + i * 42}ms` : 'transform 0s 320ms, opacity 200ms ease',
+                    }}
+                  >
+                    <span className="t-note t-num w-6 font-sans text-paper/70">{String(i + 1).padStart(2, '0')}</span>
+                    <span className="transition-transform duration-500 ease-[var(--ease-out)] group-hover:translate-x-2 group-hover:italic">{dict.nav[n.key]}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <div className="flex flex-wrap items-end justify-between gap-6 md:col-span-3 md:col-start-10 md:flex-col md:items-start md:justify-end">
+            <div className="flex flex-col items-start gap-1">
+              <Link href={href(lang, 'configurator')} className="btn btn-paper">
+                {dict.ui.configure}
+              </Link>
+              <Link href={href(lang, 'contact')} className="link text-[0.9375rem]">
+                {dict.ui.contact}
+              </Link>
+            </div>
+            <div className="sm:hidden">{languages}</div>
+          </div>
         </div>
+      </div>
+
+      {/* phone: the two actions sit at the thumb, on glass, above the home indicator */}
+      <div
+        className={`glass fixed inset-x-0 bottom-0 z-30 grid grid-cols-[1.4fr_1fr] gap-2 border-t border-paper/10 bg-ink/80 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 text-paper backdrop-blur-xl transition-transform duration-500 ease-[var(--ease-drawer)] md:hidden ${docked && !open ? '' : 'translate-y-full'}`}
+        inert={!docked || open}
+      >
+        <Link href={href(lang, 'configurator')} className="btn btn-sm btn-paper">
+          {dict.ui.configure}
+        </Link>
+        <Link href={href(lang, 'contact')} className="btn btn-sm btn-line">
+          {dict.ui.contactShort}
+        </Link>
       </div>
     </>
   );

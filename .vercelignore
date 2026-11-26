@@ -1,3 +1,4 @@
 # not needed to build: skills for Claude Code and the untouched source clips
 .claude
-media/originals
+*.mp4
+media
