@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { Footer } from '@/components/sections/Closing';
 import { BUILT, LEGAL_KEYS, LOCALES, NAV, dictionaries, href, isLegalKey, type Locale } from '@/content/i18n';
 import { LEGAL_CONTENT } from '@/content/legal';
+import { isCommercialPage } from '@/content/commercial';
+import { CommercialPage } from '@/components/sections/CommercialPage';
 import { PRIVACY_POLICY } from '@/content/site';
 import { pageMeta } from '@/lib/seo';
 
@@ -26,6 +28,7 @@ export default async function Page({ params }: Params) {
   const dict = dictionaries[lang as Locale];
   const item = find(lang as Locale, slug);
   if (!item) notFound();
+  if (isCommercialPage(item.key)) return <><CommercialPage lang={lang as Locale} page={item.key} /><Footer dict={dict} lang={lang as Locale} /></>;
   if (isLegalKey(item.key)) {
     const locale = lang as Locale;
     const legal = LEGAL_CONTENT[locale][item.key];
@@ -60,8 +63,8 @@ export default async function Page({ params }: Params) {
       <main id="contingut" className="relative z-10 bg-paper text-ink" data-theme="light">
         <div className="wrap flex min-h-svh flex-col justify-end pb-20 pt-40">
           <p className="t-note mb-5 text-oak-deep">{dict.nav[item.key]}</p>
-          <h1 className="t-title max-w-[18ch]">{dict.ui.soonTitle}</h1>
-          <p className="t-lead mt-5 max-w-[40ch] text-ink/75">{dict.ui.soonText}</p>
+          <h1 className="t-title max-w-[18ch]">{dict.nav[item.key]}</h1>
+          <p className="t-lead mt-5 max-w-[40ch] text-ink/75">{lang === 'ca' ? 'L’accés privat es facilita als clients quan correspon. Contacta amb nosaltres si necessites ajuda per accedir al teu projecte.' : 'El acceso privado se facilita a los clientes cuando corresponde. Contacta con nosotros si necesitas ayuda para acceder a tu proyecto.'}</p>
           <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-2">
             <Link href={`/${lang}`} className="btn btn-ink">
               {dict.ui.back}

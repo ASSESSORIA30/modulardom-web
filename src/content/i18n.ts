@@ -109,8 +109,8 @@ export type Dictionary = {
 
 const ca: Dictionary = {
   meta: {
-    title: 'ModularDom · La vida que imagines comença aquí',
-    description: 'Cases a mida, eficients i clau en mà. Recorre una casa ModularDom i comença a configurar la teva.',
+    title: 'Cases industrialitzades a mida | ModularDom · Lleida',
+    description: 'Cases de formigó cel·lular i entramat lleuger de fusta. Configura el teu habitatge a mida, calcula un pressupost i visita la casa pilot de Bellvís (Lleida).',
   },
   nav: {
     homes: 'Cases a mida', projects: 'Projectes', systems: 'Sistemes constructius', configurator: 'Configurador',
@@ -252,10 +252,10 @@ const ca: Dictionary = {
     homes: 'Cases a mida, eficients i clau en mà.',
     projects: 'Els projectes de ModularDom.',
     systems: 'Formigó cel·lular i entramat lleuger de fusta: els dos sistemes constructius de ModularDom.',
-    configurator: 'Configura casa teva: superfície, distribució, cuina, garatge, climatització i extres.',
+    configurator: 'Calcula el pressupost orientatiu de casa teva: superfície, plantes, coberta, distribució, instal·lacions i extres amb maqueta 3D.',
     mineral: 'ModularDom MINERAL: bungalows de formigó cel·lular per a càmpings i complexos turístics.',
     process: 'Com treballem, del primer contacte a l’entrega de l’habitatge.',
-    about: 'Qui és ModularDom.',
+    about: 'Coneix ModularDom, construcció d’habitatges a mida a Lleida i visita a la casa pilot de Bellvís.',
     contact: 'Contacta amb ModularDom o reserva una visita a la casa pilot de Bellvís (Lleida).',
     clients: 'Accés a l’àrea de clients de ModularDom.',
     privacy: 'Política de privacitat de ModularDom.', legal: 'Dades identificatives i condicions d’ús de ModularDom.', cookies: 'Informació sobre galetes i emmagatzematge tècnic de ModularDom.',
@@ -313,8 +313,8 @@ const ca: Dictionary = {
 
 const es: Dictionary = {
   meta: {
-    title: 'ModularDom · La vida que imaginas empieza aquí',
-    description: 'Casas a medida, eficientes y llave en mano. Recorre una casa ModularDom y empieza a configurar la tuya.',
+    title: 'Casas industrializadas a medida | ModularDom · Lleida',
+    description: 'Casas de hormigón celular y entramado ligero de madera. Configura tu vivienda a medida, calcula un presupuesto y visita la casa piloto de Bellvís (Lleida).',
   },
   nav: {
     homes: 'Casas a medida', projects: 'Proyectos', systems: 'Sistemas constructivos', configurator: 'Configurador',
@@ -456,10 +456,10 @@ const es: Dictionary = {
     homes: 'Casas a medida, eficientes y llave en mano.',
     projects: 'Los proyectos de ModularDom.',
     systems: 'Hormigón celular y entramado ligero de madera: los dos sistemas constructivos de ModularDom.',
-    configurator: 'Configura tu casa: superficie, distribución, cocina, garaje, climatización y extras.',
+    configurator: 'Calcula el presupuesto orientativo de tu casa: superficie, plantas, cubierta, distribución, instalaciones y extras con maqueta 3D.',
     mineral: 'ModularDom MINERAL: bungalows de hormigón celular para campings y complejos turísticos.',
     process: 'Cómo trabajamos, del primer contacto a la entrega de la vivienda.',
-    about: 'Quién es ModularDom.',
+    about: 'Conoce ModularDom, construcción de viviendas a medida en Lleida y visita a la casa piloto de Bellvís.',
     contact: 'Contacta con ModularDom o reserva una visita a la casa piloto de Bellvís (Lleida).',
     clients: 'Acceso al área de clientes de ModularDom.',
     privacy: 'Política de privacidad de ModularDom.', legal: 'Datos identificativos y condiciones de uso de ModularDom.', cookies: 'Información sobre cookies y almacenamiento técnico de ModularDom.',

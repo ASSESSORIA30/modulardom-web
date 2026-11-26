@@ -20,6 +20,12 @@ const config: NextConfig = {
   async redirects() {
     return [
       { source: '/', destination: '/ca', permanent: false },
+      // Preserve links to the existing standalone Spanish budget and static entry points.
+      { source: '/presupuesto', destination: '/es/configurador', permanent: true },
+      { source: '/presupuesto/index.html', destination: '/es/configurador', permanent: true },
+      { source: '/index.html', destination: '/ca', permanent: true },
+      { source: '/es/presupuesto', destination: '/es/configurador', permanent: true },
+      { source: '/ca/pressupost', destination: '/ca/configurador', permanent: true },
       ...Object.entries(ES_SLUGS).map(([ca, es]) => ({ source: `/es/${ca}`, destination: `/es/${es}`, permanent: true })),
     ];
   },
@@ -29,6 +35,10 @@ const config: NextConfig = {
   async headers() {
     return [
       { source: '/:path*', headers: security },
+      // Defense in depth: never index previews, even if a project-level flag is set by mistake.
+      ...(process.env.VERCEL_ENV !== 'production' || !['true', '1'].includes(process.env.SITE_INDEXABLE ?? '')
+        ? [{ source: '/:path*', headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }] }]
+        : []),
       {
         // Tour frames and stills are addressed with ?v=<version>; bump it when they are rebuilt.
         source: '/:dir(tour|stills)/:path*',

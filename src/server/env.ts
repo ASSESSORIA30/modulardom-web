@@ -20,9 +20,9 @@ export const env = {
   crmProtectionBypass: process.env.CRM_PROTECTION_BYPASS || null,
   /** bearer token for /api/admin/*; without it those routes do not exist */
   adminToken: process.env.ADMIN_TOKEN || null,
-  siteUrl: (process.env.SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')).replace(/\/$/, ''),
+  siteUrl: (process.env.SITE_URL || (process.env.VERCEL_ENV === 'production' && process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')).replace(/\/$/, ''),
   /** search engines may index the site: off on every preview */
-  indexable: on(process.env.SITE_INDEXABLE),
+  indexable: process.env.VERCEL_ENV === 'production' && on(process.env.SITE_INDEXABLE),
 };
 
 /** personal data is only collected in production once the privacy policy is published */

@@ -48,9 +48,9 @@ export function Closing({ dict, lang }: Props) {
             <Link href={href(lang, 'configurator')} className="btn btn-paper">
               {dict.ui.configure}
             </Link>
-            <a href="#contacte" className="link text-[0.9375rem]">
+            <Link href={href(lang, 'contact')} className="link text-[0.9375rem]">
               {dict.ui.info}
-            </a>
+            </Link>
           </div>
         </div>
       </Reveal>

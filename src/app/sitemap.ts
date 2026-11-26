@@ -9,6 +9,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     url: env.siteUrl + path,
     changeFrequency: key ? 'monthly' : 'weekly',
     priority: key ? 0.6 : 1,
-    alternates: { languages: Object.fromEntries(LOCALES.map((l) => [l, env.siteUrl + (key ? href(l, key) : `/${l}`)])) },
+    alternates: { languages: { ...Object.fromEntries(LOCALES.map((l) => [l, env.siteUrl + (key ? href(l, key) : `/${l}`)])), 'x-default': env.siteUrl + (key ? href('ca', key) : '/ca') } },
   }));
 }
