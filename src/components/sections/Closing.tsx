@@ -7,7 +7,7 @@ import { LeadForm } from '@/components/ui/LeadForm';
 import { Lines } from '@/components/ui/Lines';
 import { Reveal } from '@/components/ui/Reveal';
 import { Still } from '@/components/ui/Still';
-import { LEGAL_KEYS, MENU, href, type Dictionary, type Locale } from '@/content/i18n';
+import { LEGAL_KEYS, MENU, RESOURCE_KEYS, href, type Dictionary, type Locale } from '@/content/i18n';
 import { CLIENT_AREA, CLOSING, COMPANY, LOGO, waHref } from '@/content/site';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -153,7 +153,7 @@ export function Footer({ dict, lang }: Props) {
         </div>
         <nav aria-label="ModularDom" className="md:col-span-7 md:col-start-6">
           <ul className="grid grid-cols-2 gap-x-8 text-[0.9375rem] md:grid-cols-3">
-            {MENU.map((n) => (
+            {[...MENU, ...RESOURCE_KEYS.map((key) => ({ key }))].map((n) => (
               <li key={n.key}>
                 <Link href={n.key === 'clients' && CLIENT_AREA.enabled ? CLIENT_AREA.url : href(lang, n.key)} className="inline-flex min-h-11 items-center text-paper/75 transition-colors duration-200 hover:text-paper">
                   {dict.nav[n.key]}

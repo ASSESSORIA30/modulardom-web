@@ -13,6 +13,10 @@ export const NAV = [
   { key: 'about', slug: { ca: 'qui-som', es: 'quienes-somos' } },
   { key: 'contact', slug: { ca: 'contacte', es: 'contacto' } },
   { key: 'clients', slug: { ca: 'area-de-clients', es: 'area-de-clientes' } },
+  { key: 'aac', slug: { ca: 'formigo-cellular', es: 'hormigon-celular' } },
+  { key: 'faq', slug: { ca: 'preguntes-frequents', es: 'preguntas-frecuentes' } },
+  { key: 'blog', slug: { ca: 'casa-industrialitzada-o-tradicional', es: 'casa-modular-vs-tradicional' } },
+  { key: 'finishes', slug: { ca: 'acabats', es: 'acabados' } },
   { key: 'privacy', slug: { ca: 'privacitat', es: 'privacidad' } },
   { key: 'legal', slug: { ca: 'avis-legal', es: 'aviso-legal' } },
   { key: 'cookies', slug: { ca: 'galetes', es: 'cookies' } },
@@ -23,7 +27,8 @@ export const BUILT: readonly string[] = ['projects', 'configurator', 'mineral', 
 export const LEGAL_KEYS = ['privacy', 'legal', 'cookies'] as const;
 export type LegalKey = (typeof LEGAL_KEYS)[number];
 export const isLegalKey = (key: string): key is LegalKey => (LEGAL_KEYS as readonly string[]).includes(key);
-export const MENU = NAV.filter((n) => !isLegalKey(n.key));
+export const RESOURCE_KEYS = ['aac', 'faq', 'blog', 'finishes'] as const;
+export const MENU = NAV.filter((n) => !isLegalKey(n.key) && !(RESOURCE_KEYS as readonly string[]).includes(n.key));
 export const href = (lang: Locale, key: NavKey, query = '') => `/${lang}/${NAV.find((n) => n.key === key)!.slug[lang]}${query}`;
 export type NavKey = (typeof NAV)[number]['key'];
 
@@ -113,6 +118,7 @@ const ca: Dictionary = {
     description: 'Cases de formigó cel·lular i entramat lleuger de fusta. Configura el teu habitatge a mida, calcula un pressupost i visita la casa pilot de Bellvís (Lleida).',
   },
   nav: {
+    aac: 'Formigó cel·lular', faq: 'Preguntes freqüents', blog: 'Guia de construcció', finishes: 'Acabats',
     homes: 'Cases a mida', projects: 'Projectes', systems: 'Sistemes constructius', configurator: 'Configurador',
     mineral: 'ModularDom MINERAL', process: 'Com treballem', about: 'Qui som', contact: 'Contacte', clients: 'Àrea de clients', privacy: 'Privacitat', legal: 'Avís legal', cookies: 'Política de galetes',
   },
@@ -249,6 +255,7 @@ const ca: Dictionary = {
     form: { title: 'Parlem de casa teva', motive: { label: 'Què necessites?', options: ['Informació', 'Visitar la casa pilot'] }, submit: 'Envia la sol·licitud' },
   },
   seo: {
+    aac: 'Habitatges de formigó cel·lular AAC: materials, confort i procés.', faq: 'Dubtes sobre pressupost, terminis, terrenys, permisos i personalització.', blog: 'Com compara una casa industrialitzada i una de construcció tradicional.', finishes: 'Consulta les qualitats i les mostres de materials de ModularDom.',
     homes: 'Cases a mida, eficients i clau en mà.',
     projects: 'Els projectes de ModularDom.',
     systems: 'Formigó cel·lular i entramat lleuger de fusta: els dos sistemes constructius de ModularDom.',
@@ -317,6 +324,7 @@ const es: Dictionary = {
     description: 'Casas de hormigón celular y entramado ligero de madera. Configura tu vivienda a medida, calcula un presupuesto y visita la casa piloto de Bellvís (Lleida).',
   },
   nav: {
+    aac: 'Hormigón celular', faq: 'Preguntas frecuentes', blog: 'Guía de construcción', finishes: 'Acabados',
     homes: 'Casas a medida', projects: 'Proyectos', systems: 'Sistemas constructivos', configurator: 'Configurador',
     mineral: 'ModularDom MINERAL', process: 'Cómo trabajamos', about: 'Quiénes somos', contact: 'Contacto', clients: 'Área de clientes', privacy: 'Privacidad', legal: 'Aviso legal', cookies: 'Política de cookies',
   },
@@ -453,6 +461,7 @@ const es: Dictionary = {
     form: { title: 'Hablemos de tu casa', motive: { label: '¿Qué necesitas?', options: ['Información', 'Visitar la casa piloto'] }, submit: 'Envía la solicitud' },
   },
   seo: {
+    aac: 'Viviendas de hormigón celular AAC: materiales, confort y proceso.', faq: 'Dudas sobre presupuesto, plazos, terrenos, permisos y personalización.', blog: 'Cómo comparar una casa industrializada con una de construcción tradicional.', finishes: 'Consulta las calidades y las muestras de materiales de ModularDom.',
     homes: 'Casas a medida, eficientes y llave en mano.',
     projects: 'Los proyectos de ModularDom.',
     systems: 'Hormigón celular y entramado ligero de madera: los dos sistemas constructivos de ModularDom.',

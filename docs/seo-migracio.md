@@ -32,3 +32,22 @@ La portada antiga és una pàgina amb seccions de tecnologia, procés, projectes
 No s'ha modificat cap DNS, domini, hosting o entorn de producció en aquesta branca.
 
 Referència: https://developers.google.com/search/docs/crawling-indexing/site-move-with-url-changes
+
+
+## Inventari IONOS verificat el 26/11/2026
+
+Arxiu `ModularDom_backup_2026-11-26.zip` (729 fitxers, CRC correcte). A la branca V5 es recuperen els temes originals de FAQ, article de comparació i AAC amb contingut CA/ES actualitzat i enllaços al configurador únic. No es reprodueixen promeses genèriques d'estalvi, certificacions, testimonis no verificats o el preu per codi postal d'EKOHUS. `public/llms.txt` incorpora les noves rutes.
+
+- `/imperia` → `/ca/configurador` (permanent).
+- `/imperia/index.html` → `/ca/configurador` (permanent).
+- `/velaris` → `/ca/formigo-cellular` (permanent).
+- `/velaris/index.html` → `/ca/formigo-cellular` (permanent).
+- `/faq.html` → `/es/preguntas-frecuentes` (permanent).
+- `/articulo-blog.html` → `/es/casa-modular-vs-tradicional` (permanent).
+- `/contacto` → `/es/contacto` (permanent).
+- `/acabados` → `/es/acabados` (temporal).
+- `/acabados/index.html` → `/es/acabados` (temporal).
+
+Acabats: 638 JPG, un HTML i una còpia .bak. L'HTML original fa una identificació per DNI al navegador amb una taula de clients de demostració incrustada i carrega imatges externes de mostra; no és un control d'accés. No es copia al directori públic, ni es publica el fitxer .bak, l'administració o enviar.php. La pàgina V5 mostra les qualitats disponibles i explica que la selecció interactiva està pendent. Abans del canvi definitiu del domini, integrar el catàleg real amb autenticació i permisos per projecte al CRM, importar les imatges revisades i verificar la selecció i els extres. No és una recuperació funcional completa del configurador antic.
+
+La calculadora antiga Velaris/EKOHUS queda arxivada: la nova proposta de ModularDom usa una sola font de tarifa, el CRM. No es publica cap formulari antic ni enviament a serveis externs.

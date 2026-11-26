@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { COMMERCIAL, type CommercialKey } from '@/content/commercial';
+import { COMMERCIAL, COMMERCIAL_KEYS, type CommercialKey } from '@/content/commercial';
 import { dictionaries, href, type Locale } from '@/content/i18n';
 import { Systems } from '@/components/sections/Systems';
 import { Process } from '@/components/sections/Process';
@@ -26,7 +26,7 @@ export function CommercialPage({ lang, page }: { lang: Locale; page: CommercialK
             <Link href={href(lang, 'contact', '?motiu=visita')} className="link">{dict.ui.visit}</Link>
           </div>
           <nav aria-label={lang === 'ca' ? 'Més informació' : 'Más información'} className="mt-8 flex flex-wrap gap-x-6 gap-y-2 border-y border-ink/15 py-4 text-sm">
-            {(['homes', 'systems', 'process', 'about'] as const).filter((key) => key !== page).map((key) => (
+            {COMMERCIAL_KEYS.filter((key) => key !== page).map((key) => (
               <Link key={key} href={href(lang, key)} className="underline underline-offset-4">{dict.nav[key]}</Link>
             ))}
           </nav>
@@ -34,6 +34,7 @@ export function CommercialPage({ lang, page }: { lang: Locale; page: CommercialK
       </article>
       {page === 'systems' && <><Systems dict={dict} /><Materials dict={dict} /></>}
       {page === 'process' && <Process dict={dict} />}
+      {page === 'finishes' && <Materials dict={dict} />}
     </main>
   );
 }

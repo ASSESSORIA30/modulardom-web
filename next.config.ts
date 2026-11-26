@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { LEGACY_REDIRECTS } from './src/content/legacy-redirects';
 
 /*
   Pages with their own file live under app/[lang]/<catalan-slug>/. Their Spanish addresses are
@@ -20,6 +21,7 @@ const config: NextConfig = {
   async redirects() {
     return [
       { source: '/', destination: '/ca', permanent: false },
+      ...LEGACY_REDIRECTS,
       // Preserve links to the existing standalone Spanish budget and static entry points.
       { source: '/presupuesto', destination: '/es/configurador', permanent: true },
       { source: '/presupuesto/index.html', destination: '/es/configurador', permanent: true },
