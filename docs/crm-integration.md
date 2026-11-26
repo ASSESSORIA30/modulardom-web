@@ -1,4 +1,4 @@
-# Integració amb el CRM de ModularDom (proposta, no activada)
+# Integració amb el CRM de ModularDom (preparada, no activada)
 
 Analitzat en mode lectura el repositori `ASSESSORIA30/CRM_MODULARDOM` (commit `a817df9`).
 **No s'ha modificat el CRM ni s'hi ha enviat res.**
@@ -44,23 +44,28 @@ X-ModularDom-Signature: <hex HMAC-SHA256("<timestamp>.<cos>", CRM_LEAD_SECRET)>
 `configurator.input` és exactament el `ConfigInput` del motor del CRM, per desar-lo tal qual a
 `quote_versions.configurator_input`.
 
-## Què ha de fer el CRM (pendent, a càrrec de qui el manté)
+## Banda del CRM (implementada, apagada)
 
-1. Una ruta `POST /api/web/leads` que:
-   - comprovi la signatura i que el timestamp tingui menys de 5 minuts;
-   - rebutgi una `Idempotency-Key` ja vista (taula amb clau única);
-   - validi el cos amb Zod;
-   - amb la clau de servei, creï client + projecte (estat `lead`) + titular, o afegeixi una
-     activitat al client existent si el correu o el telèfon coincideixen (mateixes regles que
-     `find_client_duplicates`);
-   - respongui `201 {id}` o `200 {id, duplicate: true}`.
-2. Una funció SQL nova per a aquest ús (per exemple `web_create_lead`), perquè `create_lead`
-   exigeix un usuari de direcció.
-3. Generar `CRM_LEAD_SECRET` i donar-lo a les dues bandes com a variable d'entorn.
+Feta a `ASSESSORIA30/CRM_MODULARDOM`, branca `feature/web-leads-integration` (sense fusionar);
+el detall és al seu `docs/09-INTEGRACIO-WEB-LEADS.md`. La web no ha canviat: el contracte és el
+d'aquest document.
 
-Fins que això existeixi i s'hagi provat en un entorn de proves del CRM, `CRM_LEADS_ENABLED`
-ha de continuar apagat. Mentrestant els formularis diuen al visitant que la sol·licitud **no**
-s'ha enviat i li donen el correu i el telèfon.
+- `POST /api/web/leads`: signatura sobre el cos rebut, timestamp de menys de 5 minuts, clau
+  d'idempotència i signatura úniques, validació estricta del cos, límit de peticions a la base
+  de dades. Respon `201 {id}` o `200 {id, duplicate: true}`; la resta són errors i la web els
+  tracta com a «no enviat».
+- `web_create_lead` (SQL, només `service_role`): client + projecte en `lead` + titular + activitat
+  en una transacció; si el correu o el telèfon ja són d'un client, s'hi afegeix; si les
+  coincidències es contradiuen, no fusiona res i avisa direcció. Les visites queden pendents de
+  confirmació comercial. No crea pressupostos.
+- Variables: al CRM `WEB_LEADS_SECRET` i `WEB_LEADS_ENABLED`; a la web `CRM_LEAD_URL`
+  (`https://<domini del CRM>/api/web/leads`), `CRM_LEAD_SECRET` (el mateix secret) i
+  `CRM_LEADS_ENABLED`.
+
+Provat de cap a cap amb dades fictícies (aquesta web → la ruta del CRM → Postgres local). Falta
+la validació en un projecte de proves de Supabase; fins llavors `CRM_LEADS_ENABLED` continua
+apagat i els formularis diuen al visitant que la sol·licitud **no** s'ha enviat i li donen el
+correu i el telèfon.
 
 ## Observacions de seguretat sobre l'existent (no tocades)
 
