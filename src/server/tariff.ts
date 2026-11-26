@@ -42,7 +42,15 @@ export async function getTariff(force = false): Promise<PublishedTariff | null> 
   if (!force && cache && Date.now() - cache.at < TTL) return cache.value;
   let value: PublishedTariff | null = null;
   try {
-    const res = await fetch(env.tariffUrl, { cache: 'no-store', signal: AbortSignal.timeout(6000) });
+    // Only send the Preview protection credential to the configured CRM origin.
+    // Do not forward it through redirects or send it to a different tariff provider.
+    const target = new URL(env.tariffUrl);
+    const bypass = process.env.VERCEL_ENV !== 'production' && env.crmProtectionBypass && env.leadUrl
+      && target.protocol === 'https:' && target.origin === new URL(env.leadUrl).origin;
+    const res = await fetch(env.tariffUrl, {
+      cache: 'no-store', signal: AbortSignal.timeout(6000),
+      ...(bypass ? { headers: { 'x-vercel-protection-bypass': env.crmProtectionBypass! }, redirect: 'error' as const } : {}),
+    });
     if (res.ok) {
       const data = (await res.json()) as Record<string, unknown>;
       if (rec(data) && isTariff(data.params)) {
